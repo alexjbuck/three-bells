@@ -911,87 +911,74 @@ app.get("/api", async (req, res) => {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
                 }
-                .timer-card {
-                    background: linear-gradient(135deg, #003d6b 0%, #002447 100%);
-                    color: white;
-                    padding: 30px;
-                    border-radius: 16px;
-                    margin-bottom: 24px;
-                    box-shadow: 0 10px 30px rgba(0, 36, 71, 0.3);
-                    text-align: center;
-                }
-                .timer-display {
-                    font-size: 3.5em;
-                    font-weight: 700;
-                    margin: 20px 0;
-                    font-variant-numeric: tabular-nums;
-                    letter-spacing: 2px;
-                }
-                .timer-controls {
+                .timer-inline {
                     display: flex;
-                    gap: 12px;
-                    justify-content: center;
-                    margin-top: 20px;
+                    align-items: center;
+                    gap: 8px;
+                    margin-left: auto;
                 }
-                .timer-btn {
-                    padding: 14px 28px;
-                    border: none;
-                    border-radius: 8px;
+                .timer-display-inline {
+                    font-size: 0.9em;
                     font-weight: 600;
-                    font-size: 1em;
+                    color: #002447;
+                    font-variant-numeric: tabular-nums;
+                    min-width: 65px;
+                }
+                .timer-btn-icon {
+                    background: none;
+                    border: 2px solid #ddd;
+                    border-radius: 50%;
+                    width: 32px;
+                    height: 32px;
                     cursor: pointer;
                     transition: all 0.2s;
                     font-family: inherit;
-                    min-width: 100px;
-                    flex: 1;
-                    max-width: 150px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1em;
+                    padding: 0;
                 }
-                @media (max-width: 480px) {
-                    .timer-btn {
-                        padding: 12px 16px;
-                        font-size: 0.9em;
-                        min-width: 80px;
-                    }
-                    .timer-controls {
-                        gap: 8px;
-                    }
+                .timer-btn-icon:hover:not(:disabled) {
+                    transform: scale(1.1);
                 }
-                .timer-btn-start {
+                .timer-btn-icon-start {
+                    border-color: #28a745;
+                    color: #28a745;
+                }
+                .timer-btn-icon-start:hover:not(:disabled) {
                     background: #28a745;
                     color: white;
                 }
-                .timer-btn-start:hover {
-                    background: #218838;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+                .timer-btn-icon-pause {
+                    border-color: #ffc107;
+                    color: #ffc107;
                 }
-                .timer-btn-pause {
+                .timer-btn-icon-pause:hover:not(:disabled) {
                     background: #ffc107;
                     color: #002447;
                 }
-                .timer-btn-pause:hover {
-                    background: #ffb300;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+                .timer-btn-icon-stop {
+                    border-color: #dc3545;
+                    color: #dc3545;
                 }
-                .timer-btn-stop {
+                .timer-btn-icon-stop:hover:not(:disabled) {
                     background: #dc3545;
                     color: white;
                 }
-                .timer-btn-stop:hover {
-                    background: #c82333;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
-                }
-                .timer-btn:disabled {
-                    opacity: 0.5;
+                .timer-btn-icon:disabled {
+                    opacity: 0.3;
                     cursor: not-allowed;
                     transform: none !important;
                 }
-                .timer-status {
-                    font-size: 0.9em;
-                    opacity: 0.9;
-                    margin-top: 10px;
+                .card-header-with-timer {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 20px;
+                }
+                .card-header-with-timer h3 {
+                    margin: 0;
                 }
             </style>
         </head>
@@ -1066,25 +1053,22 @@ app.get("/api", async (req, res) => {
                     : ""
                 }
 
-                ${
-                  !editLog
-                    ? `
-                <div class="timer-card">
-                    <h3 style="margin: 0 0 10px 0;">Timer</h3>
-                    <div class="timer-display" id="timerDisplay">00:00:00</div>
-                    <div class="timer-status" id="timerStatus">Ready to start</div>
-                    <div class="timer-controls">
-                        <button id="startBtn" class="timer-btn timer-btn-start">Start</button>
-                        <button id="pauseBtn" class="timer-btn timer-btn-pause" disabled>Pause</button>
-                        <button id="stopBtn" class="timer-btn timer-btn-stop" disabled>Stop</button>
-                    </div>
-                </div>
-                `
-                    : ""
-                }
-
                 <div class="card ${editLog ? "edit-mode" : ""}">
-                    <h3>${editLog ? "Edit Entry" : "Log Hours"}</h3>
+                    <div class="card-header-with-timer">
+                        <h3>${editLog ? "Edit Entry" : "Log Hours"}</h3>
+                        ${
+                          !editLog
+                            ? `
+                        <div class="timer-inline">
+                            <div class="timer-display-inline" id="timerDisplay">00:00:00</div>
+                            <button id="startBtn" class="timer-btn-icon timer-btn-icon-start" title="Start timer">▶</button>
+                            <button id="pauseBtn" class="timer-btn-icon timer-btn-icon-pause" disabled title="Pause timer">⏸</button>
+                            <button id="stopBtn" class="timer-btn-icon timer-btn-icon-stop" disabled title="Stop and populate form">⏹</button>
+                        </div>
+                        `
+                            : ""
+                        }
+                    </div>
                     <form action="${editLog ? `/api/update/${editLog.id}` : "/api/add"}" method="POST">
                         <input type="hidden" name="_csrf" value="${csrfToken}">
                         <div class="form-group">
@@ -1197,7 +1181,6 @@ app.get("/api", async (req, res) => {
 
                 // Timer functionality
                 const timerDisplay = document.getElementById('timerDisplay');
-                const timerStatus = document.getElementById('timerStatus');
                 const startBtn = document.getElementById('startBtn');
                 const pauseBtn = document.getElementById('pauseBtn');
                 const stopBtn = document.getElementById('stopBtn');
@@ -1260,21 +1243,20 @@ app.get("/api", async (req, res) => {
                     function updateUI() {
                         if (timerState.status === 'idle') {
                             startBtn.disabled = false;
+                            startBtn.textContent = '▶';
+                            startBtn.title = 'Start timer';
                             pauseBtn.disabled = true;
                             stopBtn.disabled = true;
-                            timerStatus.textContent = 'Ready to start';
                         } else if (timerState.status === 'running') {
                             startBtn.disabled = true;
                             pauseBtn.disabled = false;
                             stopBtn.disabled = false;
-                            const startDate = new Date(timerState.startTime);
-                            timerStatus.textContent = 'Started at ' + startDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
                         } else if (timerState.status === 'paused') {
                             startBtn.disabled = false;
-                            startBtn.textContent = 'Resume';
+                            startBtn.textContent = '▶';
+                            startBtn.title = 'Resume timer';
                             pauseBtn.disabled = true;
                             stopBtn.disabled = false;
-                            timerStatus.textContent = 'Paused';
                         }
                     }
 
@@ -1306,7 +1288,8 @@ app.get("/api", async (req, res) => {
                             pausedMs: 0
                         };
                         timerDisplay.textContent = '00:00:00';
-                        startBtn.textContent = 'Start';
+                        startBtn.textContent = '▶';
+                        startBtn.title = 'Start timer';
                         updateUI();
                         saveTimerState();
                     }
@@ -1379,10 +1362,10 @@ app.get("/api", async (req, res) => {
                         resetTimer();
                         localStorage.removeItem('timerState');
 
-                        // Scroll to form
-                        const logForm = document.querySelector('.card:not(.highlight):not(.timer-card)');
-                        if (logForm) {
-                            logForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        // Focus on submit button
+                        const submitBtn = document.querySelector('.card form button[type="submit"]');
+                        if (submitBtn) {
+                            submitBtn.focus();
                         }
                     });
 
