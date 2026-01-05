@@ -1,5 +1,11 @@
 # three-bells
 
+## 1.5.2
+
+### Patch Changes
+
+- 462f471: Refactor timer UI to compact inline design. Timer controls (start/pause/stop) now appear as small icon buttons in the log entry form header instead of a large separate card, reducing visual clutter while maintaining all functionality.
+
 ## 1.5.1
 
 ### Patch Changes
