@@ -77,17 +77,54 @@ app.get('/api', async (req, res) => {
                         to { opacity: 1; transform: translateY(0); }
                     }
                     .icon {
-                        width: 80px;
-                        height: 80px;
+                        width: 90px;
+                        height: 90px;
                         background: linear-gradient(135deg, #002447 0%, #003d6b 100%);
                         border-radius: 20px;
                         margin: 0 auto 30px;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        font-size: 40px;
-                        color: white;
                         box-shadow: 0 10px 30px rgba(0, 36, 71, 0.3);
+                        position: relative;
+                        padding: 12px;
+                    }
+                    .bells {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        grid-template-rows: 1fr 1fr;
+                        gap: 4px;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100%;
+                        height: 100%;
+                        position: relative;
+                    }
+                    .bell {
+                        font-size: 20px;
+                        line-height: 1;
+                        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .bell:nth-child(1) {
+                        grid-column: 1 / -1;
+                        grid-row: 1;
+                        justify-self: center;
+                        align-self: end;
+                    }
+                    .bell:nth-child(2) {
+                        grid-column: 1;
+                        grid-row: 2;
+                        justify-self: center;
+                        align-self: start;
+                    }
+                    .bell:nth-child(3) {
+                        grid-column: 2;
+                        grid-row: 2;
+                        justify-self: center;
+                        align-self: start;
                     }
                     h1 {
                         font-size: 2.5em;
@@ -170,7 +207,13 @@ app.get('/api', async (req, res) => {
             </head>
             <body>
                 <div class="container">
-                    <div class="icon">🔔</div>
+                    <div class="icon">
+                        <div class="bells">
+                            <span class="bell">🔔</span>
+                            <span class="bell">🔔</span>
+                            <span class="bell">🔔</span>
+                        </div>
+                    </div>
                     <h1>Three Bells</h1>
                     <p class="subtitle">Navy Reserve RMP Tracker</p>
                     <a href="/api/auth/google" class="login-button">
@@ -228,143 +271,576 @@ app.get('/api', async (req, res) => {
     let editLog = req.query.edit ? await prisma.log.findFirst({ where: { id: req.query.edit, userId, rmpId: null } }) : null;
 
     res.send(`
-        <style>
-            .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
-            .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #002447; border-radius: 50%; animation: spin 1s linear infinite; }
-            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            .card { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #eee; }
-            .rmp-badge { font-size: 0.7em; padding: 3px 8px; border-radius: 10px; color: white; text-transform: uppercase; }
-        </style>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Three Bells - Dashboard</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    background: linear-gradient(135deg, #002447 0%, #003d6b 50%, #002447 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                }
+                .container {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    max-width: 700px;
+                    margin: 0 auto;
+                    padding: 30px;
+                    animation: fadeIn 0.6s ease-out;
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 30px;
+                    padding-bottom: 20px;
+                    border-bottom: 2px solid #f0f0f0;
+                }
+                .header h1 {
+                    font-size: 2em;
+                    color: #002447;
+                    margin: 0;
+                    font-weight: 700;
+                    letter-spacing: -0.5px;
+                }
+                .version {
+                    color: #999;
+                    font-size: 0.75em;
+                    margin-top: 4px;
+                }
+                .profile-container {
+                    position: relative;
+                }
+                .profile-btn {
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    padding: 5px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    transition: transform 0.2s;
+                }
+                .profile-btn:hover {
+                    transform: scale(1.05);
+                }
+                .profile-img {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: 2px solid #ddd;
+                }
+                .profile-avatar {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: 2px solid #ddd;
+                    background: #666;
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                .profile-dropdown {
+                    display: none;
+                    position: absolute;
+                    right: 0;
+                    top: 50px;
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+                    min-width: 220px;
+                    z-index: 1000;
+                    overflow: hidden;
+                }
+                .profile-dropdown.show {
+                    display: block;
+                }
+                .profile-info {
+                    padding: 16px;
+                    border-bottom: 1px solid #eee;
+                }
+                .profile-name {
+                    font-weight: 600;
+                    font-size: 0.95em;
+                    color: #002447;
+                }
+                .profile-email {
+                    color: #666;
+                    font-size: 0.85em;
+                    margin-top: 4px;
+                }
+                .profile-logout {
+                    display: block;
+                    padding: 12px 16px;
+                    color: #666;
+                    text-decoration: none;
+                    font-size: 0.9em;
+                    transition: background 0.2s;
+                }
+                .profile-logout:hover {
+                    background: #f5f5f5;
+                }
+                .summary-card {
+                    background: linear-gradient(135deg, #002447 0%, #003d6b 100%);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 16px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 10px 30px rgba(0, 36, 71, 0.3);
+                }
+                .summary-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 24px;
+                }
+                .summary-item {
+                    text-align: center;
+                }
+                .summary-label {
+                    opacity: 0.9;
+                    font-size: 0.85em;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 8px;
+                }
+                .summary-value {
+                    font-size: 2.2em;
+                    font-weight: 700;
+                    margin: 8px 0;
+                }
+                .summary-sub {
+                    color: #ffc107;
+                    font-weight: 600;
+                    font-size: 0.9em;
+                }
+                .card {
+                    background: white;
+                    padding: 24px;
+                    border-radius: 16px;
+                    margin-bottom: 24px;
+                    border: 1px solid #eee;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    transition: box-shadow 0.2s;
+                }
+                .card:hover {
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+                .card.highlight {
+                    border: 2px solid #ffc107;
+                    background: #fffef5;
+                }
+                .card.edit-mode {
+                    background: #fff3cd;
+                    border-color: #ffc107;
+                }
+                .card h3 {
+                    margin: 0 0 20px 0;
+                    color: #002447;
+                    font-size: 1.3em;
+                    font-weight: 600;
+                }
+                .form-group {
+                    margin-bottom: 16px;
+                }
+                .form-label {
+                    display: block;
+                    font-size: 0.85em;
+                    font-weight: 600;
+                    color: #555;
+                    margin-bottom: 8px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                input[type="date"],
+                input[type="time"],
+                input[type="number"] {
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    font-size: 1em;
+                    transition: border-color 0.2s;
+                    font-family: inherit;
+                }
+                input:focus {
+                    outline: none;
+                    border-color: #002447;
+                }
+                .time-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                }
+                @media (max-width: 440px) {
+                    .time-grid {
+                        grid-template-columns: 1fr;
+                    }
+                }
+                .divider {
+                    text-align: center;
+                    margin: 16px 0;
+                    font-size: 0.8em;
+                    color: #999;
+                    position: relative;
+                }
+                .divider::before,
+                .divider::after {
+                    content: '';
+                    position: absolute;
+                    top: 50%;
+                    width: 40%;
+                    height: 1px;
+                    background: #eee;
+                }
+                .divider::before {
+                    left: 0;
+                }
+                .divider::after {
+                    right: 0;
+                }
+                .manual-input {
+                    display: flex;
+                    gap: 12px;
+                }
+                .btn {
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 1em;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-family: inherit;
+                }
+                .btn-primary {
+                    background: #002447;
+                    color: white;
+                }
+                .btn-primary:hover {
+                    background: #003d6b;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(0, 36, 71, 0.3);
+                }
+                .btn-warning {
+                    background: #ffc107;
+                    color: #002447;
+                }
+                .btn-warning:hover {
+                    background: #ffb300;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+                }
+                .btn-small {
+                    padding: 6px 12px;
+                    font-size: 0.85em;
+                }
+                .btn-danger {
+                    background: #dc3545;
+                    color: white;
+                }
+                .btn-danger:hover {
+                    background: #c82333;
+                }
+                .btn-link {
+                    background: none;
+                    color: #002447;
+                    text-decoration: underline;
+                    padding: 0;
+                    font-size: 0.9em;
+                }
+                .section-title {
+                    font-size: 1.4em;
+                    font-weight: 600;
+                    color: #002447;
+                    margin: 40px 0 20px 0;
+                }
+                .rmp-card {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px;
+                    border-left: 5px solid;
+                    border-radius: 12px;
+                    margin-bottom: 16px;
+                    background: #f8f9fa;
+                }
+                .rmp-card.paid {
+                    border-left-color: #28a745;
+                }
+                .rmp-card.pending {
+                    border-left-color: #ffc107;
+                }
+                .rmp-info strong {
+                    display: block;
+                    color: #002447;
+                    margin-bottom: 8px;
+                }
+                .rmp-badge {
+                    display: inline-block;
+                    font-size: 0.75em;
+                    padding: 4px 10px;
+                    border-radius: 12px;
+                    color: white;
+                    text-transform: uppercase;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                }
+                .rmp-badge.paid {
+                    background: #28a745;
+                }
+                .rmp-badge.pending {
+                    background: #ffc107;
+                }
+                .rmp-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+                .history-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                }
+                .history-table tr {
+                    border-bottom: 1px solid #f0f0f0;
+                    transition: background 0.2s;
+                }
+                .history-table tr:hover {
+                    background: #f8f9fa;
+                }
+                .history-table tr.locked {
+                    opacity: 0.5;
+                }
+                .history-table td {
+                    padding: 16px;
+                    vertical-align: middle;
+                }
+                .history-date {
+                    font-weight: 500;
+                    color: #002447;
+                }
+                .history-time {
+                    color: #666;
+                    font-size: 0.85em;
+                    margin-top: 4px;
+                }
+                .history-hours {
+                    font-weight: 600;
+                    font-size: 1.1em;
+                    color: #002447;
+                }
+                .history-actions {
+                    text-align: right;
+                }
+                .history-actions a {
+                    text-decoration: none;
+                    margin-right: 8px;
+                    font-size: 1.2em;
+                }
+                .history-actions button {
+                    background: none;
+                    border: none;
+                    color: #dc3545;
+                    cursor: pointer;
+                    font-size: 1.2em;
+                    padding: 0;
+                    margin-left: 8px;
+                }
+                .loading-overlay {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(255,255,255,0.9);
+                    z-index: 9999;
+                    justify-content: center;
+                    align-items: center;
+                    flex-direction: column;
+                }
+                .spinner {
+                    width: 50px;
+                    height: 50px;
+                    border: 4px solid #f3f3f3;
+                    border-top: 4px solid #002447;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                }
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            </style>
+        </head>
+        <body>
+            <div id="loader" class="loading-overlay">
+                <div class="spinner"></div>
+            </div>
 
-        <div id="loader" class="loading-overlay"><div class="spinner"></div></div>
-
-        <div style="font-family:sans-serif; max-width:600px; margin:auto; padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <h1 style="margin:0;">Three Bells</h1>
-                    <small style="color:#999; font-size:0.7em;">v${packageJson.version}</small>
-                </div>
-                <div style="position:relative;">
-                    <button id="profileBtn" style="background:none; border:none; cursor:pointer; padding:5px; border-radius:50%; display:flex; align-items:center; gap:8px;">
-                        ${req.user.photos && req.user.photos[0] ? 
-                            `<img src="${req.user.photos[0].value}" alt="Profile" style="width:32px; height:32px; border-radius:50%; border:2px solid #ddd;">` :
-                            `<div style="width:32px; height:32px; border-radius:50%; border:2px solid #ddd; background:#666; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;">${(req.user.displayName || req.user.emails?.[0]?.value || 'U')[0].toUpperCase()}</div>`
-                        }
-                    </button>
-                    <div id="profileDropdown" style="display:none; position:absolute; right:0; top:40px; background:white; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:200px; z-index:1000; padding:12px;">
-                        <div style="padding:8px 12px; border-bottom:1px solid #eee;">
-                            <div style="font-weight:bold; font-size:0.9em;">${req.user.displayName || 'User'}</div>
-                            <div style="color:#666; font-size:0.8em; margin-top:4px;">${req.user.emails && req.user.emails[0] ? req.user.emails[0].value : ''}</div>
+            <div class="container">
+                <div class="header">
+                    <div>
+                        <h1>Three Bells</h1>
+                        <div class="version">v${packageJson.version}</div>
+                    </div>
+                    <div class="profile-container">
+                        <button id="profileBtn" class="profile-btn">
+                            ${req.user.photos && req.user.photos[0] ? 
+                                `<img src="${req.user.photos[0].value}" alt="Profile" class="profile-img">` :
+                                `<div class="profile-avatar">${(req.user.displayName || req.user.emails?.[0]?.value || 'U')[0].toUpperCase()}</div>`
+                            }
+                        </button>
+                        <div id="profileDropdown" class="profile-dropdown">
+                            <div class="profile-info">
+                                <div class="profile-name">${req.user.displayName || 'User'}</div>
+                                <div class="profile-email">${req.user.emails && req.user.emails[0] ? req.user.emails[0].value : ''}</div>
+                            </div>
+                            <a href="/api/logout" class="profile-logout">Logout</a>
                         </div>
-                        <a href="/api/logout" style="display:block; padding:8px 12px; color:#666; text-decoration:none; font-size:0.9em; border-radius:4px; transition:background 0.2s;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">Logout</a>
                     </div>
                 </div>
-            </div>
 
-            <div style="background:#002447; color:white; padding:20px; border-radius:12px; margin: 20px 0;">
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:20px;">
-                    <div>
-                        <small style="opacity:0.8;">UNBUNDLED BALANCE</small>
-                        <h2 style="margin:5px 0; font-size:2em;">${earnedHours} hrs</h2>
-                        <div style="color:#ffc107; font-weight:bold; font-size:0.9em;">${availableRMPs} RMPs Ready</div>
-                    </div>
-                    <div>
-                        <small style="opacity:0.8;">PENDING RMPs</small>
-                        <h2 style="margin:5px 0; font-size:2em;">${pendingRmps}</h2>
-                        <div style="color:#ffc107; font-weight:bold; font-size:0.9em;">${pendingRmpsLast30Days} in last 30 days</div>
-                    </div>
-                    <div>
-                        <small style="opacity:0.8;">PAID RMPs</small>
-                        <h2 style="margin:5px 0; font-size:2em;">${paidRmps}</h2>
+                <div class="summary-card">
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-label">Unbundled Balance</div>
+                            <div class="summary-value">${earnedHours} hrs</div>
+                            <div class="summary-sub">${availableRMPs} RMPs Ready</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Pending RMPs</div>
+                            <div class="summary-value">${pendingRmps}</div>
+                            <div class="summary-sub">${pendingRmpsLast30Days} in last 30 days</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Paid RMPs</div>
+                            <div class="summary-value">${paidRmps}</div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            ${availableRMPs > 0 && !editLog ? `
-                <div class="card" style="border: 2px solid #ffc107;">
-                    <form action="/api/submit-unit" method="POST">
-                        <label style="font-size:0.8em; font-weight:bold;">EDM FILING DATE</label>
-                        <input type="date" name="filedDate" value="${todayStr}" required style="width:100%; padding:10px; margin: 8px 0;">
-                        <button type="submit" style="width:100%; background:#ffc107; padding:12px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">Bundle 3.0 hrs</button>
+                ${availableRMPs > 0 && !editLog ? `
+                    <div class="card highlight">
+                        <h3>Ready to File RMP</h3>
+                        <form action="/api/submit-unit" method="POST">
+                            <div class="form-group">
+                                <label class="form-label">EDM Filing Date</label>
+                                <input type="date" name="filedDate" value="${todayStr}" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning" style="width:100%;">Bundle 3.0 hrs</button>
+                        </form>
+                    </div>
+                ` : ''}
+
+                <div class="card ${editLog ? 'edit-mode' : ''}">
+                    <h3>${editLog ? 'Edit Entry' : 'Log Hours'}</h3>
+                    <form action="${editLog ? `/api/update/${editLog.id}` : '/api/add'}" method="POST">
+                        <div class="form-group">
+                            <label class="form-label">Work Date</label>
+                            <input type="date" name="workDate" value="${editLog ? editLog.start.toISOString().split('T')[0] : todayStr}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Time Range</label>
+                            <div class="time-grid">
+                                <input type="time" name="startTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.start.toISOString().slice(11,16) : ''}" placeholder="Start">
+                                <input type="time" name="endTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.end.toISOString().slice(11,16) : ''}" placeholder="End">
+                            </div>
+                        </div>
+                        <div class="divider">OR MANUAL</div>
+                        <div class="form-group">
+                            <div class="manual-input">
+                                <input type="number" step="0.1" name="manualHours" value="${editLog && editLog.start.getTime() === editLog.end.getTime() ? editLog.hours : ''}" placeholder="Hours" style="flex:1;">
+                                <button type="submit" class="btn btn-primary">${editLog ? 'Save' : 'Log'}</button>
+                            </div>
+                        </div>
+                        ${editLog ? `<a href="/api" class="btn btn-link" style="display:block; text-align:center; margin-top:12px;">Cancel</a>` : ''}
                     </form>
                 </div>
-            ` : ''}
 
-            <div class="card" style="background:${editLog ? '#fff3cd' : '#f8f9fa'}">
-                <h3 style="margin-top:0;">${editLog ? 'Edit Entry' : 'Log Hours'}</h3>
-                <form action="${editLog ? `/api/update/${editLog.id}` : '/api/add'}" method="POST">
-                    <input type="date" name="workDate" value="${editLog ? editLog.start.toISOString().split('T')[0] : todayStr}" required style="width:100%; padding:10px; margin-bottom:10px;">
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                        <input type="time" name="startTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.start.toISOString().slice(11,16) : ''}" style="padding:10px;">
-                        <input type="time" name="endTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.end.toISOString().slice(11,16) : ''}" style="padding:10px;">
+                <h2 class="section-title">Submitted RMPs</h2>
+                ${rmps.length > 0 ? rmps.map(r => {
+                    const date = new Date(r.filedDate);
+                    const month = date.getUTCMonth() + 1;
+                    const day = date.getUTCDate();
+                    const year = date.getUTCFullYear();
+                    const displayDate = `${month}/${day}/${year}`;
+                    return `
+                    <div class="rmp-card ${r.status === 'paid' ? 'paid' : 'pending'}">
+                        <div class="rmp-info">
+                            <strong>Filed: ${displayDate}</strong>
+                            <span class="rmp-badge ${r.status === 'paid' ? 'paid' : 'pending'}">${r.status}</span>
+                        </div>
+                        <div class="rmp-actions">
+                            <form action="/api/rmp/toggle-paid/${r.id}" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-small ${r.status === 'paid' ? 'btn-primary' : 'btn-warning'}">${r.status === 'paid' ? 'Unpay' : 'Mark Paid'}</button>
+                            </form>
+                            <form action="/api/rmp/delete/${r.id}" method="POST" onsubmit="return confirm('Unsubmit this RMP?')" style="display:inline;">
+                                <button type="submit" class="btn btn-small btn-danger">&times;</button>
+                            </form>
+                        </div>
                     </div>
-                    <div style="text-align:center; margin:10px 0; font-size:0.7em; color:#999;">— OR MANUAL —</div>
-                    <div style="display:flex; gap:10px;">
-                        <input type="number" step="0.1" name="manualHours" value="${editLog && editLog.start.getTime() === editLog.end.getTime() ? editLog.hours : ''}" placeholder="Hrs" style="flex:1; padding:10px;">
-                        <button type="submit" style="background:#333; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold;">${editLog ? 'Save' : 'Log'}</button>
-                    </div>
-                    ${editLog ? `<a href="/api" style="display:block; text-align:center; margin-top:10px; font-size:0.8em; color:#666;">Cancel</a>` : ''}
-                </form>
+                `;
+                }).join('') : '<p style="color:#999; text-align:center; padding:20px;">No submitted RMPs yet</p>'}
+
+                <h2 class="section-title">History</h2>
+                <table class="history-table">
+                    ${logs.length > 0 ? logs.map(l => `
+                        <tr class="${l.rmpId ? 'locked' : ''}">
+                            <td>
+                                <div class="history-date">${l.start.toLocaleDateString()}</div>
+                                <div class="history-time">${l.start.getTime() !== l.end.getTime() ? l.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' - ' + l.end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Manual entry'}</div>
+                            </td>
+                            <td class="history-hours">${l.hours}h</td>
+                            <td class="history-actions">
+                                ${!l.rmpId ? `
+                                    <a href="/api?edit=${l.id}">✏️</a>
+                                    <form action="/api/delete/${l.id}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this entry?')">
+                                        <button type="submit">&times;</button>
+                                    </form>
+                                ` : '<span style="color:#999;">🔒 Bundled</span>'}
+                            </td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="3" style="text-align:center; padding:40px; color:#999;">No entries yet</td></tr>'}
+                </table>
             </div>
-
-            <h3>Submitted RMPs</h3>
-            ${rmps.map(r => {
-                // Format date from UTC components to ensure correct date display regardless of timezone
-                const date = new Date(r.filedDate);
-                const month = date.getUTCMonth() + 1;
-                const day = date.getUTCDate();
-                const year = date.getUTCFullYear();
-                const displayDate = `${month}/${day}/${year}`;
-                return `
-                <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid ${r.status === 'paid' ? '#28a745' : '#ffc107'}">
-                    <div>
-                        <strong>Filed: ${displayDate}</strong><br>
-                        <span class="rmp-badge" style="background:${r.status === 'paid' ? '#28a745' : '#ffc107'}">${r.status}</span>
-                    </div>
-                    <div style="display:flex; gap:5px;">
-                        <form action="/api/rmp/toggle-paid/${r.id}" method="POST"><button type="submit" style="font-size:0.7em;">${r.status === 'paid' ? 'Unpay' : 'Paid'}</button></form>
-                        <form action="/api/rmp/delete/${r.id}" method="POST" onsubmit="return confirm('Unsubmit?')"><button type="submit" style="font-size:0.7em; color:red;">&times;</button></form>
-                    </div>
-                </div>
-            `;
-            }).join('')}
-
-            <h3>History</h3>
-            <table style="width:100%; border-collapse:collapse; font-size:0.9em;">
-                ${logs.map(l => `
-                    <tr style="border-bottom:1px solid #eee; opacity: ${l.rmpId ? '0.5' : '1'}">
-                        <td style="padding:12px 0;">
-                            ${l.start.toLocaleDateString()}<br>
-                            <small style="color:#666;">${l.start.getTime() !== l.end.getTime() ? l.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' - ' + l.end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Manual'}</small>
-                        </td>
-                        <td><strong>${l.hours}h</strong></td>
-                        <td align="right">
-                            ${!l.rmpId ? `
-                                <a href="/api?edit=${l.id}" style="text-decoration:none;">✏️</a>
-                                <form action="/api/delete/${l.id}" method="POST" style="display:inline;"><button type="submit" style="background:none; border:none; color:red; cursor:pointer; font-size:1.2em;">&times;</button></form>
-                            ` : '🔒'}
-                        </td>
-                    </tr>
-                `).join('')}
-            </table>
-        </div>
-        <script>
-            document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => { document.getElementById('loader').style.display = 'flex'; }));
-            
-            // Profile dropdown toggle
-            const profileBtn = document.getElementById('profileBtn');
-            const profileDropdown = document.getElementById('profileDropdown');
-            if (profileBtn && profileDropdown) {
-                profileBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    profileDropdown.style.display = profileDropdown.style.display === 'none' ? 'block' : 'none';
-                });
-                document.addEventListener('click', () => {
-                    profileDropdown.style.display = 'none';
-                });
-                profileDropdown.addEventListener('click', (e) => e.stopPropagation());
-            }
-        </script>
+            <script>
+                document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => { 
+                    document.getElementById('loader').style.display = 'flex'; 
+                }));
+                
+                // Profile dropdown toggle
+                const profileBtn = document.getElementById('profileBtn');
+                const profileDropdown = document.getElementById('profileDropdown');
+                if (profileBtn && profileDropdown) {
+                    profileBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        profileDropdown.classList.toggle('show');
+                    });
+                    document.addEventListener('click', () => {
+                        profileDropdown.classList.remove('show');
+                    });
+                    profileDropdown.addEventListener('click', (e) => e.stopPropagation());
+                }
+            </script>
+        </body>
+        </html>
     `);
 });
 
