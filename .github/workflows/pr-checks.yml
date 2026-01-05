@@ -26,8 +26,3 @@ jobs:
 
       - name: Run formatting check
         run: npm run format:check
-
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
