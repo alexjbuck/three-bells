@@ -13,6 +13,24 @@ const app = express();
 // Trust proxy - required for Vercel to detect HTTPS and set secure cookies
 app.set("trust proxy", 1);
 
+// Security headers middleware
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader("X-Frame-Options", "DENY");
+  // Prevent MIME type sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Basic CSP - allow same-origin and Google OAuth
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-ancestors 'none';",
+  );
+  // Control referrer information
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Remove X-Powered-By header
+  res.removeHeader("X-Powered-By");
+  next();
+});
+
 // Middleware
 app.use(compression()); // Compress responses
 app.use(express.urlencoded({ extended: true }));
@@ -62,6 +80,17 @@ passport.deserializeUser((obj, done) => done(null, obj));
 const cleanNum = (n) => Math.round(n * 100) / 100;
 
 // SECURITY HELPERS
+// Sanitize error messages in production to prevent information leakage
+const sanitizeError = (error, isProd) => {
+  if (!isProd) {
+    return error?.message || "Bad Request";
+  }
+  // In production, don't expose error details
+  if (error?.message?.includes("Invalid") || error?.message?.includes("required")) {
+    return "Invalid request";
+  }
+  return "An error occurred";
+};
 // HTML escaping to prevent XSS
 const escapeHtml = (str) => {
   if (!str) return "";
@@ -1109,7 +1138,7 @@ app.post("/api/add", requireAuth, async (req, res) => {
     res.redirect("/api");
   } catch (error) {
     console.error("Error in /api/add:", error);
-    res.status(400).send(error.message || "Bad Request");
+    res.status(400).send(sanitizeError(error, isProd));
   }
 });
 
@@ -1141,7 +1170,7 @@ app.post("/api/update/:id", requireAuth, async (req, res) => {
     res.redirect("/api");
   } catch (error) {
     console.error("Error in /api/update:", error);
-    res.status(400).send(error.message || "Bad Request");
+    res.status(400).send(sanitizeError(error, isProd));
   }
 });
 
@@ -1189,7 +1218,7 @@ app.post("/api/submit-unit", requireAuth, async (req, res) => {
     res.redirect("/api");
   } catch (error) {
     console.error("Error in /api/submit-unit:", error);
-    res.status(400).send(error.message || "Bad Request");
+    res.status(400).send(sanitizeError(error, isProd));
   }
 });
 
@@ -1304,6 +1333,8 @@ app.post("/api/delete/:id", requireAuth, async (req, res) => {
 });
 
 app.get("/api/auth/google", (req, res, next) => {
+  // Log auth attempt
+  console.log(`[SECURITY] OAuth initiation from IP: ${req.ip || req.connection.remoteAddress}`);
   // Intercept redirect to ensure cache headers are set
   const originalRedirect = res.redirect;
   res.redirect = function (url) {
@@ -1336,32 +1367,49 @@ app.get("/api/auth/callback", (req, res, next) => {
   // Use custom callback to ensure session is saved before redirecting
   passport.authenticate("google", (err, user, _info) => {
     if (err) {
-      console.error("OAuth error:", err);
+      console.error("[SECURITY] OAuth error:", err);
+      console.warn(
+        `[SECURITY] Failed OAuth callback from IP: ${req.ip || req.connection.remoteAddress}`,
+      );
       return res.redirect("/api");
     }
     if (!user) {
+      console.warn(
+        `[SECURITY] OAuth callback failed - no user from IP: ${req.ip || req.connection.remoteAddress}`,
+      );
       return res.redirect("/api");
     }
-    // Log in the user - this automatically saves the session
-    req.logIn(user, { session: true }, (loginErr) => {
-      if (loginErr) {
-        console.error("Login error:", loginErr);
+    // Regenerate session to prevent session fixation attacks
+    req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        console.error("[SECURITY] Session regeneration error:", regenErr);
         return res.redirect("/api");
       }
-      // Explicitly save session to ensure cookie is set before redirect
-      req.session.save((saveErr) => {
-        if (saveErr) {
-          console.error("Session save error:", saveErr);
+      // Log in the user after session regeneration
+      req.logIn(user, { session: true }, (loginErr) => {
+        if (loginErr) {
+          console.error("[SECURITY] Login error:", loginErr);
           return res.redirect("/api");
         }
-        // Set cache headers on redirect response
-        res.set({
-          "Cache-Control": "no-store, no-cache, must-revalidate, private",
-          "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+        // Log successful authentication
+        console.log(
+          `[SECURITY] Successful authentication for user: ${user.id || user.emails?.[0]?.value || "unknown"} from IP: ${req.ip || req.connection.remoteAddress}`,
+        );
+        // Explicitly save session to ensure cookie is set before redirect
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[SECURITY] Session save error:", saveErr);
+            return res.redirect("/api");
+          }
+          // Set cache headers on redirect response
+          res.set({
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+            "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          });
+          res.redirect("/api");
         });
-        res.redirect("/api");
       });
     });
   })(req, res, next);
