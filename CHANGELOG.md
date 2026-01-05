@@ -1,0 +1,37 @@
+# three-bells
+
+## 1.3.0
+
+### Minor Changes
+
+- c8f4a03: Performance optimizations and UI improvements
+
+  - Add database indexes for faster queries (userId, status, filedDate, etc.)
+  - Optimize database queries with parallel execution and aggregation
+  - Add response compression middleware
+  - Redesign UI with modern styling and three-bell icon
+  - Add profile dropdown with user info and logout
+  - Add comprehensive RMP summary dashboard
+  - Fix timezone issues with date handling
+  - Add version display in UI
+  - Fix authentication session handling
+  - Improve edit entry highlighting in history table
+  - Remove HTML minification (compression handles size reduction more efficiently)
+
+### Patch Changes
+
+- c8f4a03: Fix cache-control headers to prevent caching on authentication routes
+
+  - Add cache-control headers in vercel.json for /api and /api/auth/\* routes
+  - Set no-cache headers programmatically in authentication and logout routes
+  - Prevent caching issues that could expose authenticated content to unauthenticated users
+
+- c8f4a03: Security improvements and vulnerability fixes
+
+  - Add authentication middleware to protect all POST routes
+  - Add authorization checks to RMP endpoints to prevent unauthorized access
+  - Escape user data in HTML to prevent XSS attacks (displayName, email, photo URLs)
+  - Add comprehensive input validation for dates, times, UUIDs, and numbers
+  - Implement CSRF protection with token validation on all forms
+  - Add error handling with try-catch blocks to all routes
+  - Validate query parameters to prevent injection attacks
