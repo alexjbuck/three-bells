@@ -1,5 +1,16 @@
 # three-bells
 
+## 1.5.0
+
+### Minor Changes
+
+- a8b52b4: Add start/pause/stop timer feature for tracking training hours. The timer includes:
+  - Real-time display with HH:MM:SS format
+  - Start, pause, and stop controls
+  - localStorage persistence across page reloads
+  - Auto-population of form fields when timer is stopped
+  - Status indicators showing timer state and start time
+
 ## 1.4.0
 
 ### Minor Changes
