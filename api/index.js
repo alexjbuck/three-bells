@@ -34,15 +34,18 @@ app.use((req, res, next) => {
 // Middleware
 app.use(compression()); // Compress responses
 app.use(express.urlencoded({ extended: true }));
+const isProd = process.env.NODE_ENV === "production";
+
 app.use(
   session({
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      // secure: true is required when sameSite: "none" - Vercel always uses HTTPS
-      secure: true,
+      // secure: true is required when sameSite: "none" - but only in production (HTTPS)
+      // In local dev, secure: false allows cookies over HTTP
+      secure: isProd,
       // sameSite: "none" is required for OAuth callbacks (cross-site redirects)
-      // This allows the cookie to be sent when Google redirects back to our callback
-      sameSite: "none",
+      // In local dev, we can use "lax" since we're not doing cross-site
+      sameSite: isProd ? "none" : "lax",
       httpOnly: true,
     },
     secret: process.env.SESSION_SECRET,
@@ -57,8 +60,6 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
-
-const isProd = process.env.NODE_ENV === "production";
 const baseUrl = isProd
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : "http://localhost:3000";
@@ -186,6 +187,8 @@ app.get("/", async (req, res) => {
   res.redirect("/api");
 });
 const packageJson = require("../package.json");
+const fs = require("node:fs");
+const path = require("node:path");
 
 app.get("/api", async (req, res) => {
   try {
@@ -516,6 +519,21 @@ app.get("/api", async (req, res) => {
                     color: #999;
                     font-size: 0.75em;
                     margin-top: 4px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .changelog-link {
+                    color: #999;
+                    text-decoration: none;
+                    font-size: 0.9em;
+                    transition: color 0.2s;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .changelog-link:hover {
+                    color: #002447;
                 }
                 .profile-container {
                     position: relative;
@@ -904,7 +922,12 @@ app.get("/api", async (req, res) => {
                 <div class="header">
                     <div>
                         <h1>Three Bells</h1>
-                        <div class="version">v${packageJson.version}</div>
+                        <div class="version">
+                            v${packageJson.version}
+                            <a href="/api/changelog" class="changelog-link" title="View changelog">
+                                📋
+                            </a>
+                        </div>
                     </div>
                     <div class="profile-container">
                         <button id="profileBtn" class="profile-btn">
@@ -1423,6 +1446,156 @@ app.get("/api/logout", (req, res) => {
     Expires: "0",
   });
   req.logout(() => res.redirect("/api"));
+});
+
+app.get("/api/changelog", (req, res) => {
+  try {
+    const changelogPath = path.join(__dirname, "..", "CHANGELOG.md");
+    const changelog = fs.readFileSync(changelogPath, "utf-8");
+
+    // Convert markdown to HTML (simple conversion)
+    // Note: Using replace() with regex flags is correct here - replaceAll() doesn't support flags
+    const lines = changelog.split("\n");
+    let html = "";
+    let inList = false;
+
+    for (const line of lines) {
+      if (line.startsWith("# ")) {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        html += `<h1>${line.substring(2)}</h1>`;
+      } else if (line.startsWith("## ")) {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        html += `<h2>${line.substring(3)}</h2>`;
+      } else if (line.startsWith("### ")) {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        html += `<h3>${line.substring(4)}</h3>`;
+      } else if (line.startsWith("- ")) {
+        if (!inList) {
+          html += "<ul>";
+          inList = true;
+        }
+        html += `<li>${line.substring(2)}</li>`;
+      } else if (line.trim() === "") {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        html += "<p></p>";
+      } else {
+        if (inList) {
+          html += "</ul>";
+          inList = false;
+        }
+        html += `<p>${line}</p>`;
+      }
+    }
+    if (inList) {
+      html += "</ul>";
+    }
+
+    res.set({
+      "Cache-Control": "public, max-age=3600",
+      "Content-Type": "text/html; charset=utf-8",
+    });
+
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Changelog - Three Bells</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #002447 0%, #003d6b 50%, #002447 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+          }
+          .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            animation: fadeIn 0.6s ease-out;
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          h1 {
+            color: #002447;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            border-bottom: 3px solid #002447;
+            padding-bottom: 10px;
+          }
+          h2 {
+            color: #002447;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+          }
+          h3 {
+            color: #003d6b;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+          }
+          ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+          }
+          li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+          }
+          p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+          }
+          .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #002447;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            border: 2px solid #002447;
+            border-radius: 8px;
+            transition: all 0.2s;
+          }
+          .back-link:hover {
+            background: #002447;
+            color: white;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <a href="/api" class="back-link">← Back to Dashboard</a>
+          ${html}
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Error reading changelog:", error);
+    res.status(500).send("Error loading changelog");
+  }
 });
 
 module.exports = app;
