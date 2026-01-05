@@ -4,14 +4,21 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaSessionStore } = require('@quixo3/prisma-session-store');
+const compression = require('compression');
 
 const prisma = new PrismaClient();
 const app = express();
 
 // Middleware
+app.use(compression()); // Compress responses
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },
+    cookie: { 
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        sameSite: 'lax',
+        httpOnly: true
+    },
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -43,8 +50,12 @@ app.get('/', async (req, res) => {
 const packageJson = require('../package.json');
 
 app.get('/api', async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.send(`
+    try {
+        // Check authentication
+        if (!req.isAuthenticated || !req.isAuthenticated()) {
+        // Landing page - no JavaScript, pure HTML/CSS
+        // Don't cache - this is the same route as authenticated page
+        const html = `
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -243,34 +254,51 @@ app.get('/api', async (req, res) => {
                 </div>
             </body>
             </html>
-        `);
+        `;
+        return res.send(html);
     }
 
     const userId = req.user.id;
-    const logs = await prisma.log.findMany({ where: { userId }, orderBy: { start: 'desc' } });
-    const rmps = await prisma.rmp.findMany({ where: { userId }, orderBy: { filedDate: 'desc' } });
-
-    const earnedHours = cleanNum(logs.filter(l => !l.rmpId).reduce((s, l) => s + l.hours, 0));
-    const availableRMPs = Math.floor(earnedHours / 3);
     const todayStr = new Date().toISOString().split('T')[0];
-
-    // Calculate RMP summary metrics
-    const pendingRmps = rmps.filter(r => r.status === 'submitted').length;
-    const paidRmps = rmps.filter(r => r.status === 'paid').length;
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
-    thirtyDaysAgo.setUTCHours(0, 0, 0, 0); // Start of day 30 days ago
-    // Count pending RMPs from (today - 30 days) onwards, including future dates
+    thirtyDaysAgo.setUTCHours(0, 0, 0, 0);
+
+    // Optimize: Fetch data in parallel and calculate metrics in database
+    const [logs, rmps, unbundledHours, rmpCounts] = await Promise.all([
+        prisma.log.findMany({ where: { userId }, orderBy: { start: 'desc' } }),
+        prisma.rmp.findMany({ where: { userId }, orderBy: { filedDate: 'desc' } }),
+        // Calculate unbundled hours in database
+        prisma.log.aggregate({
+            where: { userId, rmpId: null },
+            _sum: { hours: true }
+        }),
+        // Count RMPs by status in database
+        prisma.rmp.groupBy({
+            by: ['status'],
+            where: { userId },
+            _count: true
+        })
+    ]);
+
+    const earnedHours = cleanNum(unbundledHours._sum.hours || 0);
+    const availableRMPs = Math.floor(earnedHours / 3);
+
+    // Calculate RMP summary metrics from database results
+    const pendingRmps = rmpCounts.find(r => r.status === 'submitted')?._count || 0;
+    const paidRmps = rmpCounts.find(r => r.status === 'paid')?._count || 0;
+    
+    // Count pending RMPs in last 30 days
     const pendingRmpsLast30Days = rmps.filter(r => {
         if (r.status !== 'submitted') return false;
         const filedDate = new Date(r.filedDate);
-        filedDate.setUTCHours(0, 0, 0, 0); // Normalize to start of day for comparison
-        return filedDate >= thirtyDaysAgo; // Includes future dates
+        filedDate.setUTCHours(0, 0, 0, 0);
+        return filedDate >= thirtyDaysAgo;
     }).length;
 
     let editLog = req.query.edit ? await prisma.log.findFirst({ where: { id: req.query.edit, userId, rmpId: null } }) : null;
 
-    res.send(`
+    const html = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -627,6 +655,13 @@ app.get('/api', async (req, res) => {
                 .history-table tr.locked {
                     opacity: 0.5;
                 }
+                .history-table tr.editing {
+                    background: #fff3cd !important;
+                    border-left: 4px solid #ffc107;
+                }
+                .history-table tr.editing:hover {
+                    background: #fff3cd !important;
+                }
                 .history-table td {
                     padding: 16px;
                     vertical-align: middle;
@@ -802,7 +837,7 @@ app.get('/api', async (req, res) => {
                 <h2 class="section-title">History</h2>
                 <table class="history-table">
                     ${logs.length > 0 ? logs.map(l => `
-                        <tr class="${l.rmpId ? 'locked' : ''}">
+                        <tr class="${l.rmpId ? 'locked' : ''} ${editLog && editLog.id === l.id ? 'editing' : ''}">
                             <td>
                                 <div class="history-date">${l.start.toLocaleDateString()}</div>
                                 <div class="history-time">${l.start.getTime() !== l.end.getTime() ? l.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' - ' + l.end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Manual entry'}</div>
@@ -841,7 +876,12 @@ app.get('/api', async (req, res) => {
             </script>
         </body>
         </html>
-    `);
+    `;
+    res.send(html);
+    } catch (error) {
+        console.error('Error in /api route:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
 
 // LOGIC HELPERS

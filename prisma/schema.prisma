@@ -13,6 +13,10 @@ model Rmp {
   filedDate DateTime
   status    String   @default("submitted")
   logs      Log[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([filedDate])
 }
 
 model Log {
@@ -23,6 +27,10 @@ model Log {
   end       DateTime
   rmpId     String?  @db.Uuid
   rmp       Rmp?     @relation(fields: [rmpId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, rmpId])
+  @@index([start])
 }
 
 // Required for the session store
