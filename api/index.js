@@ -1054,7 +1054,9 @@ app.get("/api", async (req, res) => {
                     : ""
                 }
 
-                ${!editLog ? `
+                ${
+                  !editLog
+                    ? `
                 <div class="timer-card">
                     <h3 style="margin: 0 0 10px 0;">Timer</h3>
                     <div class="timer-display" id="timerDisplay">00:00:00</div>
@@ -1065,7 +1067,9 @@ app.get("/api", async (req, res) => {
                         <button id="stopBtn" class="timer-btn timer-btn-stop" disabled>Stop</button>
                     </div>
                 </div>
-                ` : ''}
+                `
+                    : ""
+                }
 
                 <div class="card ${editLog ? "edit-mode" : ""}">
                     <h3>${editLog ? "Edit Entry" : "Log Hours"}</h3>
