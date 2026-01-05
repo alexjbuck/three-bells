@@ -1,5 +1,27 @@
 # three-bells
 
+## 1.4.0
+
+### Minor Changes
+
+- 6c5f4b3: Add changelog viewer to application
+
+  - Add `/api/changelog` route to display formatted changelog
+  - Add changelog icon (📋) next to version number in header
+  - Convert CHANGELOG.md markdown to HTML for display
+  - Style changelog page with consistent app design
+
+### Patch Changes
+
+- de23b32: Security hardening and OWASP Top 10 improvements
+
+  - Add security headers (X-Frame-Options, CSP, X-Content-Type-Options, Referrer-Policy)
+  - Fix session fixation vulnerability by regenerating session after OAuth login
+  - Sanitize error messages in production to prevent information leakage
+  - Add security logging for authentication events
+  - Remove X-Powered-By header
+  - Add trust proxy configuration for Vercel deployment
+
 ## 1.3.1
 
 ### Patch Changes
