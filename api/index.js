@@ -1320,17 +1320,6 @@ app.get("/api/auth/google", (req, res, next) => {
 });
 
 app.get("/api/auth/callback", (req, res, next) => {
-  // Intercept redirect to ensure cache headers are set
-  const originalRedirect = res.redirect;
-  res.redirect = function (url) {
-    this.set({
-      "Cache-Control": "no-store, no-cache, must-revalidate, private",
-      "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    });
-    return originalRedirect.call(this, url);
-  };
   // Set cache headers before Passport processes callback
   res.set({
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
@@ -1338,9 +1327,36 @@ app.get("/api/auth/callback", (req, res, next) => {
     Pragma: "no-cache",
     Expires: "0",
   });
-  passport.authenticate("google", {
-    successRedirect: "/api",
-    failureRedirect: "/api",
+  // Use custom callback to ensure session is saved before redirecting
+  passport.authenticate("google", (err, user, info) => {
+    if (err) {
+      console.error("OAuth error:", err);
+      return res.redirect("/api");
+    }
+    if (!user) {
+      return res.redirect("/api");
+    }
+    // Log in the user
+    req.logIn(user, (loginErr) => {
+      if (loginErr) {
+        console.error("Login error:", loginErr);
+        return res.redirect("/api");
+      }
+      // Ensure session is saved before redirecting
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("Session save error:", saveErr);
+        }
+        // Set cache headers on redirect response
+        res.set({
+          "Cache-Control": "no-store, no-cache, must-revalidate, private",
+          "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        });
+        res.redirect("/api");
+      });
+    });
   })(req, res, next);
 });
 
