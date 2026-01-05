@@ -1,10 +1,11 @@
-const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const session = require('express-session');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const { PrismaSessionStore } = require('@quixo3/prisma-session-store');
-const compression = require('compression');
+const express = require("express");
+const { PrismaClient } = require("@prisma/client");
+const session = require("express-session");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
+const compression = require("compression");
+const crypto = require("node:crypto");
 
 const prisma = new PrismaClient();
 const app = express();
@@ -12,55 +13,157 @@ const app = express();
 // Middleware
 app.use(compression()); // Compress responses
 app.use(express.urlencoded({ extended: true }));
-app.use(session({
-    cookie: { 
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-        sameSite: 'lax',
-        httpOnly: true
+app.use(
+  session({
+    cookie: {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production", // HTTPS only in production
+      sameSite: "lax",
+      httpOnly: true,
     },
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: new PrismaSessionStore(prisma, { checkPeriod: 2 * 60 * 1000, dbRecordIdIsSessionId: true })
-}));
+    store: new PrismaSessionStore(prisma, {
+      checkPeriod: 2 * 60 * 1000,
+      dbRecordIdIsSessionId: true,
+    }),
+  }),
+);
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-const isProd = process.env.NODE_ENV === 'production';
-const baseUrl = isProd ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000';
+const isProd = process.env.NODE_ENV === "production";
+const baseUrl = isProd
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://localhost:3000";
 
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${baseUrl}/api/auth/callback`
-}, (token, tokenSecret, profile, done) => done(null, profile)));
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: `${baseUrl}/api/auth/callback`,
+    },
+    (token, tokenSecret, profile, done) => done(null, profile),
+  ),
+);
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
 const cleanNum = (n) => Math.round(n * 100) / 100;
 
-// MAIN ROUTE
-app.get('/', async (req, res) => {
-    // redirect to /api
-    res.redirect('/api');
-});
-const packageJson = require('../package.json');
+// SECURITY HELPERS
+// HTML escaping to prevent XSS
+const escapeHtml = (str) => {
+  if (!str) return "";
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+};
 
-app.get('/api', async (req, res) => {
-    try {
-        // Check authentication
-        if (!req.isAuthenticated || !req.isAuthenticated()) {
-        // Landing page - no JavaScript, pure HTML/CSS
-        // Don't cache - this is the same route as authenticated page
-        const html = `
+// URL validation for image src attributes - validate HTTP/HTTPS only
+const escapeUrl = (str) => {
+  if (!str) return null;
+  const url = String(str).trim();
+  // Only allow http:// or https:// URLs for security (prevents javascript: and data: XSS)
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return null; // Invalid protocol, reject
+  }
+  // Return URL as-is - template literal with double quotes will handle it correctly
+  // Only escape double quotes that could break out of the HTML attribute
+  return url.replaceAll('"', "&quot;");
+};
+
+// UUID validation
+const isValidUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+// Date validation (YYYY-MM-DD)
+const isValidDate = (str) => {
+  if (!str || typeof str !== "string") return false;
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(str)) return false;
+  const date = new Date(str + "T00:00:00");
+  return date instanceof Date && !Number.isNaN(date) && str === date.toISOString().split("T")[0];
+};
+
+// Time validation (HH:MM)
+const isValidTime = (str) => {
+  if (!str || typeof str !== "string") return false;
+  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  return timeRegex.test(str);
+};
+
+// Number validation
+const isValidNumber = (val, min = -Infinity, max = Infinity) => {
+  const num = Number.parseFloat(val);
+  return !Number.isNaN(num) && Number.isFinite(num) && num >= min && num <= max;
+};
+
+// Authentication middleware
+const requireAuth = (req, res, next) => {
+  if (!req.isAuthenticated?.()) {
+    return res.redirect("/api");
+  }
+  if (!req.user?.id) {
+    return res.status(401).send("Unauthorized");
+  }
+  next();
+};
+
+// CSRF token generation and validation
+const generateCSRFToken = () => {
+  return crypto.randomBytes(32).toString("hex");
+};
+
+const getCSRFToken = (req) => {
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = generateCSRFToken();
+  }
+  return req.session.csrfToken;
+};
+
+const validateCSRFToken = (req) => {
+  const token = req.body._csrf || req.body.csrfToken;
+  const sessionToken = req.session.csrfToken;
+  return token && sessionToken && token === sessionToken;
+};
+
+// MAIN ROUTE
+app.get("/", async (req, res) => {
+  // redirect to /api
+  res.redirect("/api");
+});
+const packageJson = require("../package.json");
+
+app.get("/api", async (req, res) => {
+  try {
+    // Prevent caching - this endpoint serves different content based on auth state
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+
+    // Check authentication
+    if (!req.isAuthenticated?.()) {
+      // Landing page - no JavaScript, pure HTML/CSS
+      // Don't cache - this is the same route as authenticated page
+      const html = `
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="description" content="Track and manage your Navy Reserve RMP (Reserve Manpower Program) training hours. Log hours, bundle into RMPs, and track payment status.">
                 <title>Three Bells - Navy Reserve RMP Tracker</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -255,48 +358,70 @@ app.get('/api', async (req, res) => {
             </body>
             </html>
         `;
-        return res.send(html);
+      return res.send(html);
     }
 
     const userId = req.user.id;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split("T")[0];
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
     thirtyDaysAgo.setUTCHours(0, 0, 0, 0);
 
     // Optimize: Fetch data in parallel and calculate metrics in database
     const [logs, rmps, unbundledHours, rmpCounts] = await Promise.all([
-        prisma.log.findMany({ where: { userId }, orderBy: { start: 'desc' } }),
-        prisma.rmp.findMany({ where: { userId }, orderBy: { filedDate: 'desc' } }),
-        // Calculate unbundled hours in database
-        prisma.log.aggregate({
-            where: { userId, rmpId: null },
-            _sum: { hours: true }
-        }),
-        // Count RMPs by status in database
-        prisma.rmp.groupBy({
-            by: ['status'],
-            where: { userId },
-            _count: true
-        })
+      prisma.log.findMany({ where: { userId }, orderBy: { start: "desc" } }),
+      prisma.rmp.findMany({ where: { userId }, orderBy: { filedDate: "desc" } }),
+      // Calculate unbundled hours in database
+      prisma.log.aggregate({
+        where: { userId, rmpId: null },
+        _sum: { hours: true },
+      }),
+      // Count RMPs by status in database
+      prisma.rmp.groupBy({
+        by: ["status"],
+        where: { userId },
+        _count: true,
+      }),
     ]);
 
     const earnedHours = cleanNum(unbundledHours._sum.hours || 0);
     const availableRMPs = Math.floor(earnedHours / 3);
 
     // Calculate RMP summary metrics from database results
-    const pendingRmps = rmpCounts.find(r => r.status === 'submitted')?._count || 0;
-    const paidRmps = rmpCounts.find(r => r.status === 'paid')?._count || 0;
-    
+    const pendingRmps = rmpCounts.find((r) => r.status === "submitted")?._count || 0;
+    const paidRmps = rmpCounts.find((r) => r.status === "paid")?._count || 0;
+
     // Count pending RMPs in last 30 days
-    const pendingRmpsLast30Days = rmps.filter(r => {
-        if (r.status !== 'submitted') return false;
-        const filedDate = new Date(r.filedDate);
-        filedDate.setUTCHours(0, 0, 0, 0);
-        return filedDate >= thirtyDaysAgo;
+    const pendingRmpsLast30Days = rmps.filter((r) => {
+      if (r.status !== "submitted") return false;
+      const filedDate = new Date(r.filedDate);
+      filedDate.setUTCHours(0, 0, 0, 0);
+      return filedDate >= thirtyDaysAgo;
     }).length;
 
-    let editLog = req.query.edit ? await prisma.log.findFirst({ where: { id: req.query.edit, userId, rmpId: null } }) : null;
+    // Validate edit query parameter if present
+    let editLog = null;
+    if (req.query.edit) {
+      if (isValidUUID(req.query.edit)) {
+        editLog = await prisma.log.findFirst({
+          where: { id: req.query.edit, userId, rmpId: null },
+        });
+      } else {
+        // Invalid UUID in query - ignore it
+        console.warn("Invalid UUID in edit query parameter:", req.query.edit);
+      }
+    }
+
+    // Get CSRF token for forms
+    const csrfToken = getCSRFToken(req);
+
+    // Escape user data to prevent XSS
+    const userDisplayName = escapeHtml(req.user.displayName || "User");
+    const userEmail = escapeHtml(req.user.emails?.[0]?.value || "");
+    const userPhotoUrl = req.user.photos?.[0]?.value ? escapeUrl(req.user.photos[0].value) : null;
+    const userInitial = (req.user.displayName ||
+      req.user.emails?.[0]?.value ||
+      "U")[0].toUpperCase();
 
     const html = `
         <!DOCTYPE html>
@@ -304,6 +429,7 @@ app.get('/api', async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="description" content="Three Bells Dashboard - Manage your Navy Reserve RMP training hours, view unbundled balance, track submitted RMPs, and log new training entries.">
             <title>Three Bells - Dashboard</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -737,15 +863,16 @@ app.get('/api', async (req, res) => {
                     </div>
                     <div class="profile-container">
                         <button id="profileBtn" class="profile-btn">
-                            ${req.user.photos && req.user.photos[0] ? 
-                                `<img src="${req.user.photos[0].value}" alt="Profile" class="profile-img">` :
-                                `<div class="profile-avatar">${(req.user.displayName || req.user.emails?.[0]?.value || 'U')[0].toUpperCase()}</div>`
+                            ${
+                              userPhotoUrl
+                                ? `<img src="${userPhotoUrl}" alt="Profile" class="profile-img">`
+                                : `<div class="profile-avatar">${userInitial}</div>`
                             }
                         </button>
                         <div id="profileDropdown" class="profile-dropdown">
                             <div class="profile-info">
-                                <div class="profile-name">${req.user.displayName || 'User'}</div>
-                                <div class="profile-email">${req.user.emails && req.user.emails[0] ? req.user.emails[0].value : ''}</div>
+                                <div class="profile-name">${userDisplayName}</div>
+                                <div class="profile-email">${userEmail}</div>
                             </div>
                             <a href="/api/logout" class="profile-logout">Logout</a>
                         </div>
@@ -771,10 +898,13 @@ app.get('/api', async (req, res) => {
                     </div>
                 </div>
 
-                ${availableRMPs > 0 && !editLog ? `
+                ${
+                  availableRMPs > 0 && !editLog
+                    ? `
                     <div class="card highlight">
                         <h3>Ready to File RMP</h3>
                         <form action="/api/submit-unit" method="POST">
+                            <input type="hidden" name="_csrf" value="${csrfToken}">
                             <div class="form-group">
                                 <label class="form-label">EDM Filing Date</label>
                                 <input type="date" name="filedDate" value="${todayStr}" required>
@@ -782,77 +912,101 @@ app.get('/api', async (req, res) => {
                             <button type="submit" class="btn btn-warning" style="width:100%;">Bundle 3.0 hrs</button>
                         </form>
                     </div>
-                ` : ''}
+                `
+                    : ""
+                }
 
-                <div class="card ${editLog ? 'edit-mode' : ''}">
-                    <h3>${editLog ? 'Edit Entry' : 'Log Hours'}</h3>
-                    <form action="${editLog ? `/api/update/${editLog.id}` : '/api/add'}" method="POST">
+                <div class="card ${editLog ? "edit-mode" : ""}">
+                    <h3>${editLog ? "Edit Entry" : "Log Hours"}</h3>
+                    <form action="${editLog ? `/api/update/${editLog.id}` : "/api/add"}" method="POST">
+                        <input type="hidden" name="_csrf" value="${csrfToken}">
                         <div class="form-group">
                             <label class="form-label">Work Date</label>
-                            <input type="date" name="workDate" value="${editLog ? editLog.start.toISOString().split('T')[0] : todayStr}" required>
+                            <input type="date" name="workDate" value="${editLog ? editLog.start.toISOString().split("T")[0] : todayStr}" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Time Range</label>
                             <div class="time-grid">
-                                <input type="time" name="startTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.start.toISOString().slice(11,16) : ''}" placeholder="Start">
-                                <input type="time" name="endTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.end.toISOString().slice(11,16) : ''}" placeholder="End">
+                                <input type="time" name="startTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.start.toISOString().slice(11, 16) : ""}" placeholder="Start">
+                                <input type="time" name="endTime" value="${editLog && editLog.start.getTime() !== editLog.end.getTime() ? editLog.end.toISOString().slice(11, 16) : ""}" placeholder="End">
                             </div>
                         </div>
                         <div class="divider">OR MANUAL</div>
                         <div class="form-group">
                             <div class="manual-input">
-                                <input type="number" step="0.1" name="manualHours" value="${editLog && editLog.start.getTime() === editLog.end.getTime() ? editLog.hours : ''}" placeholder="Hours" style="flex:1;">
-                                <button type="submit" class="btn btn-primary">${editLog ? 'Save' : 'Log'}</button>
+                                <input type="number" step="0.1" name="manualHours" value="${editLog && editLog.start.getTime() === editLog.end.getTime() ? editLog.hours : ""}" placeholder="Hours" style="flex:1;">
+                                <button type="submit" class="btn btn-primary">${editLog ? "Save" : "Log"}</button>
                             </div>
                         </div>
-                        ${editLog ? `<a href="/api" class="btn btn-link" style="display:block; text-align:center; margin-top:12px;">Cancel</a>` : ''}
+                        ${editLog ? `<a href="/api" class="btn btn-link" style="display:block; text-align:center; margin-top:12px;">Cancel</a>` : ""}
                     </form>
                 </div>
 
                 <h2 class="section-title">Submitted RMPs</h2>
-                ${rmps.length > 0 ? rmps.map(r => {
-                    const date = new Date(r.filedDate);
-                    const month = date.getUTCMonth() + 1;
-                    const day = date.getUTCDate();
-                    const year = date.getUTCFullYear();
-                    const displayDate = `${month}/${day}/${year}`;
-                    return `
-                    <div class="rmp-card ${r.status === 'paid' ? 'paid' : 'pending'}">
+                ${
+                  rmps.length > 0
+                    ? rmps
+                        .map((r) => {
+                          const date = new Date(r.filedDate);
+                          const month = date.getUTCMonth() + 1;
+                          const day = date.getUTCDate();
+                          const year = date.getUTCFullYear();
+                          const displayDate = `${month}/${day}/${year}`;
+                          return `
+                    <div class="rmp-card ${r.status === "paid" ? "paid" : "pending"}">
                         <div class="rmp-info">
                             <strong>Filed: ${displayDate}</strong>
-                            <span class="rmp-badge ${r.status === 'paid' ? 'paid' : 'pending'}">${r.status}</span>
+                            <span class="rmp-badge ${r.status === "paid" ? "paid" : "pending"}">${r.status}</span>
                         </div>
                         <div class="rmp-actions">
                             <form action="/api/rmp/toggle-paid/${r.id}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-small ${r.status === 'paid' ? 'btn-primary' : 'btn-warning'}">${r.status === 'paid' ? 'Unpay' : 'Mark Paid'}</button>
+                                <input type="hidden" name="_csrf" value="${csrfToken}">
+                                <button type="submit" class="btn btn-small ${r.status === "paid" ? "btn-primary" : "btn-warning"}">${r.status === "paid" ? "Unpay" : "Mark Paid"}</button>
                             </form>
                             <form action="/api/rmp/delete/${r.id}" method="POST" onsubmit="return confirm('Unsubmit this RMP?')" style="display:inline;">
+                                <input type="hidden" name="_csrf" value="${csrfToken}">
                                 <button type="submit" class="btn btn-small btn-danger">&times;</button>
                             </form>
                         </div>
                     </div>
                 `;
-                }).join('') : '<p style="color:#999; text-align:center; padding:20px;">No submitted RMPs yet</p>'}
+                        })
+                        .join("")
+                    : '<p style="color:#999; text-align:center; padding:20px;">No submitted RMPs yet</p>'
+                }
 
                 <h2 class="section-title">History</h2>
                 <table class="history-table">
-                    ${logs.length > 0 ? logs.map(l => `
-                        <tr class="${l.rmpId ? 'locked' : ''} ${editLog && editLog.id === l.id ? 'editing' : ''}">
+                    ${
+                      logs.length > 0
+                        ? logs
+                            .map(
+                              (l) => `
+                        <tr class="${l.rmpId ? "locked" : ""} ${editLog && editLog.id === l.id ? "editing" : ""}">
                             <td>
                                 <div class="history-date">${l.start.toLocaleDateString()}</div>
-                                <div class="history-time">${l.start.getTime() !== l.end.getTime() ? l.start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + ' - ' + l.end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Manual entry'}</div>
+                                <div class="history-time">${l.start.getTime() === l.end.getTime() ? "Manual entry" : l.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " - " + l.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                             </td>
                             <td class="history-hours">${l.hours}h</td>
                             <td class="history-actions">
-                                ${!l.rmpId ? `
+                                ${
+                                  l.rmpId
+                                    ? '<span style="color:#999;">🔒 Bundled</span>'
+                                    : `
                                     <a href="/api?edit=${l.id}">✏️</a>
                                     <form action="/api/delete/${l.id}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this entry?')">
+                                        <input type="hidden" name="_csrf" value="${csrfToken}">
                                         <button type="submit">&times;</button>
                                     </form>
-                                ` : '<span style="color:#999;">🔒 Bundled</span>'}
+                                `
+                                }
                             </td>
                         </tr>
-                    `).join('') : '<tr><td colspan="3" style="text-align:center; padding:40px; color:#999;">No entries yet</td></tr>'}
+                    `,
+                            )
+                            .join("")
+                        : '<tr><td colspan="3" style="text-align:center; padding:40px; color:#999;">No entries yet</td></tr>'
+                    }
                 </table>
             </div>
             <script>
@@ -878,94 +1032,294 @@ app.get('/api', async (req, res) => {
         </html>
     `;
     res.send(html);
-    } catch (error) {
-        console.error('Error in /api route:', error);
-        res.status(500).send('Internal Server Error');
-    }
+  } catch (error) {
+    console.error("Error in /api route:", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 // LOGIC HELPERS
 const getTimes = (body) => {
-    const { workDate, startTime, endTime, manualHours } = body;
-    if (manualHours) {
-        const d = new Date(`${workDate}T12:00:00`);
-        return { hours: parseFloat(manualHours), start: d, end: d };
+  const { workDate, startTime, endTime, manualHours } = body;
+
+  // Validate workDate
+  if (!isValidDate(workDate)) {
+    throw new Error("Invalid work date format");
+  }
+
+  if (manualHours) {
+    // Validate manual hours
+    if (!isValidNumber(manualHours, 0, 24)) {
+      throw new Error("Invalid manual hours (must be between 0 and 24)");
     }
-    const start = new Date(`${workDate}T${startTime}:00`);
-    let end = new Date(`${workDate}T${endTime}:00`);
-    if (end < start) end.setDate(end.getDate() + 1);
-    return { hours: cleanNum((end - start) / 3600000), start, end };
+    const d = new Date(`${workDate}T12:00:00`);
+    return { hours: cleanNum(Number.parseFloat(manualHours)), start: d, end: d };
+  }
+
+  // Validate time inputs
+  if (!startTime || !endTime) {
+    throw new Error("Both start and end times are required");
+  }
+  if (!isValidTime(startTime) || !isValidTime(endTime)) {
+    throw new Error("Invalid time format (must be HH:MM)");
+  }
+
+  const start = new Date(`${workDate}T${startTime}:00`);
+  let end = new Date(`${workDate}T${endTime}:00`);
+  if (end < start) end.setDate(end.getDate() + 1);
+
+  // Validate that duration is reasonable (not negative, not more than 24 hours)
+  const hours = cleanNum((end - start) / 3600000);
+  if (hours < 0 || hours > 24) {
+    throw new Error("Invalid time range (must be between 0 and 24 hours)");
+  }
+
+  return { hours, start, end };
 };
 
 // HANDLERS
-app.post('/api/add', async (req, res) => {
-    const data = getTimes(req.body);
-    await prisma.log.create({ data: { ...data, userId: req.user.id } });
-    res.redirect('/api');
-});
-
-app.post('/api/update/:id', async (req, res) => {
-    const data = getTimes(req.body);
-    await prisma.log.updateMany({ where: { id: req.params.id, userId: req.user.id, rmpId: null }, data });
-    res.redirect('/api');
-});
-
-app.post('/api/submit-unit', async (req, res) => {
-    const earned = await prisma.log.findMany({ where: { userId: req.user.id, rmpId: null }, orderBy: { start: 'asc' } });
-    if (earned.reduce((s, l) => s + l.hours, 0) >= 3) {
-        await prisma.$transaction(async (tx) => {
-            // Parse date string (YYYY-MM-DD) and create at UTC midnight for timezone independence
-            const [year, month, day] = req.body.filedDate.split('-').map(Number);
-            const filedDate = new Date(Date.UTC(year, month - 1, day));
-            const rmp = await tx.rmp.create({ data: { userId: req.user.id, filedDate } });
-            let needed = 3.0;
-            for (const log of earned) {
-                if (needed <= 0) break;
-                if (log.hours <= needed) {
-                    needed = cleanNum(needed - log.hours);
-                    await tx.log.update({ where: { id: log.id }, data: { rmpId: rmp.id } });
-                } else {
-                    const remainder = cleanNum(log.hours - needed);
-                    await tx.log.update({ where: { id: log.id }, data: { hours: needed, rmpId: rmp.id } });
-                    await tx.log.create({ data: { userId: req.user.id, hours: remainder, start: log.start, end: log.end } });
-                    needed = 0;
-                }
-            }
-        });
+app.post("/api/add", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
     }
-    res.redirect('/api');
+
+    // Validate and parse input
+    const data = getTimes(req.body);
+
+    // Create log entry
+    await prisma.log.create({ data: { ...data, userId: req.user.id } });
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/add:", error);
+    res.status(400).send(error.message || "Bad Request");
+  }
 });
 
-app.post('/api/rmp/toggle-paid/:id', async (req, res) => {
-    const rmp = await prisma.rmp.findUnique({ where: { id: req.params.id } });
-    await prisma.rmp.update({ where: { id: rmp.id }, data: { status: rmp.status === 'paid' ? 'submitted' : 'paid' } });
-    res.redirect('/api');
-});
+app.post("/api/update/:id", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
+    }
 
-app.post('/api/rmp/delete/:id', async (req, res) => {
-    await prisma.$transaction(async (tx) => {
-        await tx.rmp.delete({ where: { id: req.params.id } });
-        // Consolidation: Merge logs with identical start/end/user that are now unbundled
-        const logs = await tx.log.findMany({ where: { userId: req.user.id, rmpId: null }, orderBy: { start: 'asc' } });
-        for (let i = 0; i < logs.length - 1; i++) {
-            const a = logs[i]; const b = logs[i+1];
-            if (a.start.getTime() === b.start.getTime() && a.end.getTime() === b.end.getTime()) {
-                await tx.log.update({ where: { id: a.id }, data: { hours: cleanNum(a.hours + b.hours) } });
-                await tx.log.delete({ where: { id: b.id } });
-                logs.splice(i+1, 1); i--;
-            }
-        }
+    // Validate UUID
+    if (!isValidUUID(req.params.id)) {
+      return res.status(400).send("Invalid log ID");
+    }
+
+    // Validate and parse input
+    const data = getTimes(req.body);
+
+    // Update log (only if it belongs to user and is not locked)
+    const result = await prisma.log.updateMany({
+      where: { id: req.params.id, userId: req.user.id, rmpId: null },
+      data,
     });
-    res.redirect('/api');
+
+    if (result.count === 0) {
+      return res.status(404).send("Log entry not found or locked");
+    }
+
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/update:", error);
+    res.status(400).send(error.message || "Bad Request");
+  }
 });
 
-app.post('/api/delete/:id', async (req, res) => {
-    await prisma.log.deleteMany({ where: { id: req.params.id, userId: req.user.id, rmpId: null } });
-    res.redirect('/api');
+app.post("/api/submit-unit", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
+    }
+
+    // Validate filedDate
+    if (!isValidDate(req.body.filedDate)) {
+      return res.status(400).send("Invalid filing date format");
+    }
+
+    const earned = await prisma.log.findMany({
+      where: { userId: req.user.id, rmpId: null },
+      orderBy: { start: "asc" },
+    });
+    const totalHours = earned.reduce((s, l) => s + l.hours, 0);
+
+    if (totalHours >= 3) {
+      await prisma.$transaction(async (tx) => {
+        // Parse date string (YYYY-MM-DD) and create at UTC midnight for timezone independence
+        const [year, month, day] = req.body.filedDate.split("-").map(Number);
+        const filedDate = new Date(Date.UTC(year, month - 1, day));
+        const rmp = await tx.rmp.create({ data: { userId: req.user.id, filedDate } });
+        let needed = 3;
+        for (const log of earned) {
+          if (needed <= 0) break;
+          if (log.hours <= needed) {
+            needed = cleanNum(needed - log.hours);
+            await tx.log.update({ where: { id: log.id }, data: { rmpId: rmp.id } });
+          } else {
+            const remainder = cleanNum(log.hours - needed);
+            await tx.log.update({ where: { id: log.id }, data: { hours: needed, rmpId: rmp.id } });
+            await tx.log.create({
+              data: { userId: req.user.id, hours: remainder, start: log.start, end: log.end },
+            });
+            needed = 0;
+          }
+        }
+      });
+    }
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/submit-unit:", error);
+    res.status(400).send(error.message || "Bad Request");
+  }
 });
 
-app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/api/auth/callback', passport.authenticate('google', { successRedirect: '/api', failureRedirect: '/api' }));
-app.get('/api/logout', (req, res) => req.logout(() => res.redirect('/api')));
+app.post("/api/rmp/toggle-paid/:id", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
+    }
+
+    // Validate UUID
+    if (!isValidUUID(req.params.id)) {
+      return res.status(400).send("Invalid RMP ID");
+    }
+
+    // Check authorization - verify RMP belongs to user
+    const rmp = await prisma.rmp.findUnique({ where: { id: req.params.id } });
+    if (!rmp) {
+      return res.status(404).send("RMP not found");
+    }
+    if (rmp.userId !== req.user.id) {
+      return res.status(403).send("Unauthorized");
+    }
+
+    // Update status
+    await prisma.rmp.update({
+      where: { id: rmp.id },
+      data: { status: rmp.status === "paid" ? "submitted" : "paid" },
+    });
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/rmp/toggle-paid:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/api/rmp/delete/:id", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
+    }
+
+    // Validate UUID
+    if (!isValidUUID(req.params.id)) {
+      return res.status(400).send("Invalid RMP ID");
+    }
+
+    // Check authorization - verify RMP belongs to user
+    const rmp = await prisma.rmp.findUnique({ where: { id: req.params.id } });
+    if (!rmp) {
+      return res.status(404).send("RMP not found");
+    }
+    if (rmp.userId !== req.user.id) {
+      return res.status(403).send("Unauthorized");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.rmp.delete({ where: { id: req.params.id } });
+      // Consolidation: Merge logs with identical start/end/user that are now unbundled
+      const logs = await tx.log.findMany({
+        where: { userId: req.user.id, rmpId: null },
+        orderBy: { start: "asc" },
+      });
+      for (let i = 0; i < logs.length - 1; i++) {
+        const a = logs[i];
+        const b = logs[i + 1];
+        if (a.start.getTime() === b.start.getTime() && a.end.getTime() === b.end.getTime()) {
+          await tx.log.update({
+            where: { id: a.id },
+            data: { hours: cleanNum(a.hours + b.hours) },
+          });
+          await tx.log.delete({ where: { id: b.id } });
+          logs.splice(i + 1, 1);
+          i--;
+        }
+      }
+    });
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/rmp/delete:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/api/delete/:id", requireAuth, async (req, res) => {
+  try {
+    // Validate CSRF token
+    if (!validateCSRFToken(req)) {
+      return res.status(403).send("Invalid CSRF token");
+    }
+
+    // Validate UUID
+    if (!isValidUUID(req.params.id)) {
+      return res.status(400).send("Invalid log ID");
+    }
+
+    // Delete log (only if it belongs to user and is not locked)
+    const result = await prisma.log.deleteMany({
+      where: { id: req.params.id, userId: req.user.id, rmpId: null },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).send("Log entry not found or locked");
+    }
+
+    res.redirect("/api");
+  } catch (error) {
+    console.error("Error in /api/delete:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get(
+  "/api/auth/google",
+  (req, res, next) => {
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+    next();
+  },
+  passport.authenticate("google", { scope: ["profile", "email"] }),
+);
+
+app.get(
+  "/api/auth/callback",
+  (req, res, next) => {
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+    next();
+  },
+  passport.authenticate("google", { successRedirect: "/api", failureRedirect: "/api" }),
+);
+
+app.get("/api/logout", (req, res) => {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+  req.logout(() => res.redirect("/api"));
+});
 
 module.exports = app;
