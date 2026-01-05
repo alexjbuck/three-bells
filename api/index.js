@@ -17,8 +17,11 @@ app.use(
   session({
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production", // HTTPS only in production
-      sameSite: "lax",
+      // secure: true is required when sameSite: "none" - Vercel always uses HTTPS
+      secure: true,
+      // sameSite: "none" is required for OAuth callbacks (cross-site redirects)
+      // This allows the cookie to be sent when Google redirects back to our callback
+      sameSite: "none",
       httpOnly: true,
     },
     secret: process.env.SESSION_SECRET,
@@ -1328,7 +1331,7 @@ app.get("/api/auth/callback", (req, res, next) => {
     Expires: "0",
   });
   // Use custom callback to ensure session is saved before redirecting
-  passport.authenticate("google", (err, user, info) => {
+  passport.authenticate("google", (err, user, _info) => {
     if (err) {
       console.error("OAuth error:", err);
       return res.redirect("/api");
