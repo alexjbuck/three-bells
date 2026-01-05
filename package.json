@@ -8,7 +8,10 @@
   "license": "ISC",
   "packageManager": "npm@10.9.4",
   "scripts": {
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "dependencies": {
     "@prisma/client": "^6.19.1",
@@ -20,6 +23,7 @@
     "prisma": "^6.19.1"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "dotenv": "^17.2.3"
   }
 }

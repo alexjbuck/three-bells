@@ -40,6 +40,8 @@ app.get('/', async (req, res) => {
     // redirect to /api
     res.redirect('/api');
 });
+const packageJson = require('../package.json');
+
 app.get('/api', async (req, res) => {
     if (!req.isAuthenticated()) {
         return res.send(`
@@ -88,8 +90,25 @@ app.get('/api', async (req, res) => {
 
         <div style="font-family:sans-serif; max-width:600px; margin:auto; padding:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="margin:0;">Three Bells</h1>
-                <a href="/api/logout" style="color:#666; font-size:0.8em;">Logout</a>
+                <div>
+                    <h1 style="margin:0;">Three Bells</h1>
+                    <small style="color:#999; font-size:0.7em;">v${packageJson.version}</small>
+                </div>
+                <div style="position:relative;">
+                    <button id="profileBtn" style="background:none; border:none; cursor:pointer; padding:5px; border-radius:50%; display:flex; align-items:center; gap:8px;">
+                        ${req.user.photos && req.user.photos[0] ? 
+                            `<img src="${req.user.photos[0].value}" alt="Profile" style="width:32px; height:32px; border-radius:50%; border:2px solid #ddd;">` :
+                            `<div style="width:32px; height:32px; border-radius:50%; border:2px solid #ddd; background:#666; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px;">${(req.user.displayName || req.user.emails?.[0]?.value || 'U')[0].toUpperCase()}</div>`
+                        }
+                    </button>
+                    <div id="profileDropdown" style="display:none; position:absolute; right:0; top:40px; background:white; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); min-width:200px; z-index:1000; padding:12px;">
+                        <div style="padding:8px 12px; border-bottom:1px solid #eee;">
+                            <div style="font-weight:bold; font-size:0.9em;">${req.user.displayName || 'User'}</div>
+                            <div style="color:#666; font-size:0.8em; margin-top:4px;">${req.user.emails && req.user.emails[0] ? req.user.emails[0].value : ''}</div>
+                        </div>
+                        <a href="/api/logout" style="display:block; padding:8px 12px; color:#666; text-decoration:none; font-size:0.9em; border-radius:4px; transition:background 0.2s;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">Logout</a>
+                    </div>
+                </div>
             </div>
 
             <div style="background:#002447; color:white; padding:20px; border-radius:12px; margin: 20px 0;">
@@ -181,6 +200,20 @@ app.get('/api', async (req, res) => {
         </div>
         <script>
             document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => { document.getElementById('loader').style.display = 'flex'; }));
+            
+            // Profile dropdown toggle
+            const profileBtn = document.getElementById('profileBtn');
+            const profileDropdown = document.getElementById('profileDropdown');
+            if (profileBtn && profileDropdown) {
+                profileBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    profileDropdown.style.display = profileDropdown.style.display === 'none' ? 'block' : 'none';
+                });
+                document.addEventListener('click', () => {
+                    profileDropdown.style.display = 'none';
+                });
+                profileDropdown.addEventListener('click', (e) => e.stopPropagation());
+            }
         </script>
     `);
 });
