@@ -1,5 +1,11 @@
 # three-bells
 
+## 1.5.1
+
+### Patch Changes
+
+- 18d67ea: Fix timer buttons overflowing on mobile devices by adding responsive styling with flexible widths and mobile-specific media queries
+
 ## 1.5.0
 
 ### Minor Changes
