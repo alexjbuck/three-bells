@@ -911,6 +911,76 @@ app.get("/api", async (req, res) => {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
                 }
+                .timer-card {
+                    background: linear-gradient(135deg, #003d6b 0%, #002447 100%);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 16px;
+                    margin-bottom: 24px;
+                    box-shadow: 0 10px 30px rgba(0, 36, 71, 0.3);
+                    text-align: center;
+                }
+                .timer-display {
+                    font-size: 3.5em;
+                    font-weight: 700;
+                    margin: 20px 0;
+                    font-variant-numeric: tabular-nums;
+                    letter-spacing: 2px;
+                }
+                .timer-controls {
+                    display: flex;
+                    gap: 12px;
+                    justify-content: center;
+                    margin-top: 20px;
+                }
+                .timer-btn {
+                    padding: 14px 28px;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 1em;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-family: inherit;
+                    min-width: 100px;
+                }
+                .timer-btn-start {
+                    background: #28a745;
+                    color: white;
+                }
+                .timer-btn-start:hover {
+                    background: #218838;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+                }
+                .timer-btn-pause {
+                    background: #ffc107;
+                    color: #002447;
+                }
+                .timer-btn-pause:hover {
+                    background: #ffb300;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+                }
+                .timer-btn-stop {
+                    background: #dc3545;
+                    color: white;
+                }
+                .timer-btn-stop:hover {
+                    background: #c82333;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+                }
+                .timer-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                    transform: none !important;
+                }
+                .timer-status {
+                    font-size: 0.9em;
+                    opacity: 0.9;
+                    margin-top: 10px;
+                }
             </style>
         </head>
         <body>
@@ -980,6 +1050,23 @@ app.get("/api", async (req, res) => {
                             <button type="submit" class="btn btn-warning" style="width:100%;">Bundle 3.0 hrs</button>
                         </form>
                     </div>
+                `
+                    : ""
+                }
+
+                ${
+                  !editLog
+                    ? `
+                <div class="timer-card">
+                    <h3 style="margin: 0 0 10px 0;">Timer</h3>
+                    <div class="timer-display" id="timerDisplay">00:00:00</div>
+                    <div class="timer-status" id="timerStatus">Ready to start</div>
+                    <div class="timer-controls">
+                        <button id="startBtn" class="timer-btn timer-btn-start">Start</button>
+                        <button id="pauseBtn" class="timer-btn timer-btn-pause" disabled>Pause</button>
+                        <button id="stopBtn" class="timer-btn timer-btn-stop" disabled>Stop</button>
+                    </div>
+                </div>
                 `
                     : ""
                 }
@@ -1078,10 +1165,10 @@ app.get("/api", async (req, res) => {
                 </table>
             </div>
             <script>
-                document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => { 
-                    document.getElementById('loader').style.display = 'flex'; 
+                document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => {
+                    document.getElementById('loader').style.display = 'flex';
                 }));
-                
+
                 // Profile dropdown toggle
                 const profileBtn = document.getElementById('profileBtn');
                 const profileDropdown = document.getElementById('profileDropdown');
@@ -1094,6 +1181,201 @@ app.get("/api", async (req, res) => {
                         profileDropdown.classList.remove('show');
                     });
                     profileDropdown.addEventListener('click', (e) => e.stopPropagation());
+                }
+
+                // Timer functionality
+                const timerDisplay = document.getElementById('timerDisplay');
+                const timerStatus = document.getElementById('timerStatus');
+                const startBtn = document.getElementById('startBtn');
+                const pauseBtn = document.getElementById('pauseBtn');
+                const stopBtn = document.getElementById('stopBtn');
+
+                if (timerDisplay && startBtn && pauseBtn && stopBtn) {
+                    let timerInterval = null;
+                    let timerState = {
+                        status: 'idle', // idle, running, paused
+                        startTime: null,
+                        elapsedMs: 0,
+                        pausedMs: 0
+                    };
+
+                    // Load timer state from localStorage
+                    function loadTimerState() {
+                        const saved = localStorage.getItem('timerState');
+                        if (saved) {
+                            try {
+                                timerState = JSON.parse(saved);
+                                if (timerState.status === 'running') {
+                                    // Calculate elapsed time since page load
+                                    const now = Date.now();
+                                    const actualElapsed = now - new Date(timerState.startTime).getTime();
+                                    timerState.elapsedMs = actualElapsed;
+                                    startInterval();
+                                    updateUI();
+                                } else if (timerState.status === 'paused') {
+                                    updateDisplay();
+                                    updateUI();
+                                }
+                            } catch (e) {
+                                console.error('Failed to load timer state:', e);
+                                resetTimer();
+                            }
+                        }
+                    }
+
+                    // Save timer state to localStorage
+                    function saveTimerState() {
+                        localStorage.setItem('timerState', JSON.stringify(timerState));
+                    }
+
+                    // Format milliseconds to HH:MM:SS
+                    function formatTime(ms) {
+                        const totalSeconds = Math.floor(ms / 1000);
+                        const hours = Math.floor(totalSeconds / 3600);
+                        const minutes = Math.floor((totalSeconds % 3600) / 60);
+                        const seconds = totalSeconds % 60;
+                        return [hours, minutes, seconds]
+                            .map(v => v.toString().padStart(2, '0'))
+                            .join(':');
+                    }
+
+                    // Update timer display
+                    function updateDisplay() {
+                        timerDisplay.textContent = formatTime(timerState.elapsedMs);
+                    }
+
+                    // Update UI based on state
+                    function updateUI() {
+                        if (timerState.status === 'idle') {
+                            startBtn.disabled = false;
+                            pauseBtn.disabled = true;
+                            stopBtn.disabled = true;
+                            timerStatus.textContent = 'Ready to start';
+                        } else if (timerState.status === 'running') {
+                            startBtn.disabled = true;
+                            pauseBtn.disabled = false;
+                            stopBtn.disabled = false;
+                            const startDate = new Date(timerState.startTime);
+                            timerStatus.textContent = 'Started at ' + startDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                        } else if (timerState.status === 'paused') {
+                            startBtn.disabled = false;
+                            startBtn.textContent = 'Resume';
+                            pauseBtn.disabled = true;
+                            stopBtn.disabled = false;
+                            timerStatus.textContent = 'Paused';
+                        }
+                    }
+
+                    // Start interval for updating display
+                    function startInterval() {
+                        if (timerInterval) clearInterval(timerInterval);
+                        timerInterval = setInterval(() => {
+                            const now = Date.now();
+                            timerState.elapsedMs = now - new Date(timerState.startTime).getTime();
+                            updateDisplay();
+                            saveTimerState();
+                        }, 100);
+                    }
+
+                    // Stop interval
+                    function stopInterval() {
+                        if (timerInterval) {
+                            clearInterval(timerInterval);
+                            timerInterval = null;
+                        }
+                    }
+
+                    // Reset timer
+                    function resetTimer() {
+                        timerState = {
+                            status: 'idle',
+                            startTime: null,
+                            elapsedMs: 0,
+                            pausedMs: 0
+                        };
+                        timerDisplay.textContent = '00:00:00';
+                        startBtn.textContent = 'Start';
+                        updateUI();
+                        saveTimerState();
+                    }
+
+                    // Start button handler
+                    startBtn.addEventListener('click', () => {
+                        if (timerState.status === 'idle') {
+                            timerState.startTime = new Date().toISOString();
+                            timerState.elapsedMs = 0;
+                            timerState.status = 'running';
+                        } else if (timerState.status === 'paused') {
+                            // Resume: adjust start time to account for paused duration
+                            const now = Date.now();
+                            const pausedDuration = now - timerState.pausedMs;
+                            timerState.startTime = new Date(now - timerState.elapsedMs).toISOString();
+                            timerState.status = 'running';
+                        }
+                        startInterval();
+                        updateUI();
+                        saveTimerState();
+                    });
+
+                    // Pause button handler
+                    pauseBtn.addEventListener('click', () => {
+                        if (timerState.status === 'running') {
+                            timerState.status = 'paused';
+                            timerState.pausedMs = Date.now();
+                            stopInterval();
+                            updateUI();
+                            saveTimerState();
+                        }
+                    });
+
+                    // Stop button handler
+                    stopBtn.addEventListener('click', () => {
+                        stopInterval();
+
+                        // Populate form with timer data
+                        const startDate = new Date(timerState.startTime);
+                        const endDate = new Date(startDate.getTime() + timerState.elapsedMs);
+
+                        const workDateInput = document.querySelector('input[name="workDate"]');
+                        const startTimeInput = document.querySelector('input[name="startTime"]');
+                        const endTimeInput = document.querySelector('input[name="endTime"]');
+
+                        if (workDateInput && startTimeInput && endTimeInput) {
+                            // Format date as YYYY-MM-DD
+                            const year = startDate.getFullYear();
+                            const month = String(startDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(startDate.getDate()).padStart(2, '0');
+                            workDateInput.value = year + '-' + month + '-' + day;
+
+                            // Format times as HH:MM
+                            const startHours = String(startDate.getHours()).padStart(2, '0');
+                            const startMinutes = String(startDate.getMinutes()).padStart(2, '0');
+                            startTimeInput.value = startHours + ':' + startMinutes;
+
+                            const endHours = String(endDate.getHours()).padStart(2, '0');
+                            const endMinutes = String(endDate.getMinutes()).padStart(2, '0');
+                            endTimeInput.value = endHours + ':' + endMinutes;
+
+                            // Clear manual hours input
+                            const manualHoursInput = document.querySelector('input[name="manualHours"]');
+                            if (manualHoursInput) {
+                                manualHoursInput.value = '';
+                            }
+                        }
+
+                        // Reset timer
+                        resetTimer();
+                        localStorage.removeItem('timerState');
+
+                        // Scroll to form
+                        const logForm = document.querySelector('.card:not(.highlight):not(.timer-card)');
+                        if (logForm) {
+                            logForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    });
+
+                    // Initialize timer on page load
+                    loadTimerState();
                 }
             </script>
         </body>
