@@ -173,6 +173,97 @@ const validateCSRFToken = (req) => {
   return token && sessionToken && token === sessionToken;
 };
 
+// OAuth Proxy Flow Helpers
+// Validate if a return_to origin is allowed (production or Vercel preview)
+const isValidReturnOrigin = (urlString) => {
+  try {
+    const url = new URL(urlString);
+    const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+
+    // Allow production domain
+    if (productionUrl && url.hostname === productionUrl) {
+      return true;
+    }
+
+    // Allow Vercel preview deployments (*.vercel.app)
+    if (url.hostname.endsWith(".vercel.app")) {
+      return true;
+    }
+
+    // Allow localhost for development
+    if (!isProd && url.hostname === "localhost") {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+// Encrypt state parameter with return_to URL
+const encryptState = (returnTo) => {
+  const algorithm = "aes-256-gcm";
+  const key = crypto.scryptSync(process.env.SESSION_SECRET, "salt", 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(algorithm, key, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(returnTo, "utf8"),
+    cipher.final(),
+  ]);
+
+  const authTag = cipher.getAuthTag();
+
+  // Combine iv + authTag + encrypted and encode as base64url
+  const combined = Buffer.concat([iv, authTag, encrypted]);
+  return combined.toString("base64url");
+};
+
+// Decrypt state parameter to get return_to URL
+const decryptState = (encryptedState) => {
+  try {
+    const algorithm = "aes-256-gcm";
+    const key = crypto.scryptSync(process.env.SESSION_SECRET, "salt", 32);
+    const combined = Buffer.from(encryptedState, "base64url");
+
+    const iv = combined.subarray(0, 16);
+    const authTag = combined.subarray(16, 32);
+    const encrypted = combined.subarray(32);
+
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    decipher.setAuthTag(authTag);
+
+    const decrypted = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]);
+
+    return decrypted.toString("utf8");
+  } catch {
+    return null;
+  }
+};
+
+// Generate a one-time session token for cross-origin handoff
+const generateSessionToken = () => {
+  return crypto.randomBytes(32).toString("base64url");
+};
+
+// Store to track one-time session tokens (in-memory for simplicity)
+// In production with multiple instances, consider Redis or database
+const sessionTokenStore = new Map();
+
+// Clean up expired tokens every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, data] of sessionTokenStore.entries()) {
+    if (now > data.expiresAt) {
+      sessionTokenStore.delete(token);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // MAIN ROUTE
 app.get("/", async (req, res) => {
   // Prevent caching - redirects should not be cached
@@ -378,7 +469,7 @@ app.get("/api", async (req, res) => {
                     </div>
                     <h1>Three Bells</h1>
                     <p class="subtitle">Navy Reserve RMP Tracker</p>
-                    <a href="/api/auth/google" class="login-button">
+                    <a href="/api/auth/google" class="login-button" id="google-signin-btn">
                         <svg class="google-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -403,6 +494,41 @@ app.get("/api", async (req, res) => {
                         </div>
                     </div>
                 </div>
+                <script>
+                    // OAuth Proxy Flow for Preview Deployments
+                    (function() {
+                        // Check for session_token in URL (redirected back from production)
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const sessionToken = urlParams.get('session_token');
+
+                        if (sessionToken) {
+                            // Redirect to session endpoint to exchange token for session
+                            window.location.href = '/api/auth/session?session_token=' + encodeURIComponent(sessionToken);
+                            return;
+                        }
+
+                        // Detect if we're on a preview deployment (not production)
+                        const currentOrigin = window.location.origin;
+                        const isProduction = ${
+                          isProd ? `currentOrigin === 'https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}'` : "false"
+                        };
+
+                        // If on preview, modify login button to use OAuth proxy flow
+                        if (!isProduction) {
+                            const loginBtn = document.getElementById('google-signin-btn');
+                            if (loginBtn) {
+                                // Determine production URL
+                                const productionUrl = ${isProd ? `'https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}'` : "'http://localhost:3000'"};
+                                const returnTo = encodeURIComponent(currentOrigin);
+
+                                // Update href to point to production with return_to parameter
+                                loginBtn.href = productionUrl + '/api/auth/google?return_to=' + returnTo;
+
+                                console.log('[OAUTH-PROXY] Preview deployment detected, using OAuth proxy flow via:', productionUrl);
+                            }
+                        }
+                    })();
+                </script>
             </body>
             </html>
         `;
@@ -1635,6 +1761,22 @@ app.post("/api/delete/:id", requireAuth, async (req, res) => {
 app.get("/api/auth/google", (req, res, next) => {
   // Log auth attempt
   console.log(`[SECURITY] OAuth initiation from IP: ${req.ip || req.connection.remoteAddress}`);
+
+  // Handle return_to parameter for OAuth proxy flow (preview deployments)
+  const returnTo = req.query.return_to;
+  if (returnTo) {
+    // Validate the return_to origin
+    if (!isValidReturnOrigin(returnTo)) {
+      console.warn(
+        `[SECURITY] Invalid return_to origin rejected: ${returnTo} from IP: ${req.ip || req.connection.remoteAddress}`,
+      );
+      return res.status(400).send("Invalid return_to origin");
+    }
+    // Store return_to in session for retrieval after OAuth callback
+    req.session.oauthReturnTo = returnTo;
+    console.log(`[OAUTH-PROXY] Storing return_to in session: ${returnTo}`);
+  }
+
   // Intercept redirect to ensure cache headers are set
   const originalRedirect = res.redirect;
   res.redirect = function (url) {
@@ -1679,6 +1821,10 @@ app.get("/api/auth/callback", (req, res, next) => {
       );
       return res.redirect("/api");
     }
+
+    // Preserve return_to before session regeneration (for OAuth proxy flow)
+    const returnTo = req.session.oauthReturnTo;
+
     // Regenerate session to prevent session fixation attacks
     req.session.regenerate((regenErr) => {
       if (regenErr) {
@@ -1701,6 +1847,7 @@ app.get("/api/auth/callback", (req, res, next) => {
             console.error("[SECURITY] Session save error:", saveErr);
             return res.redirect("/api");
           }
+
           // Set cache headers on redirect response
           res.set({
             "Cache-Control": "no-store, no-cache, must-revalidate, private",
@@ -1708,11 +1855,97 @@ app.get("/api/auth/callback", (req, res, next) => {
             Pragma: "no-cache",
             Expires: "0",
           });
+
+          // OAuth proxy flow: redirect to preview deployment with session token
+          if (returnTo && isValidReturnOrigin(returnTo)) {
+            console.log(`[OAUTH-PROXY] Redirecting to return_to: ${returnTo}`);
+
+            // Generate one-time session token for cross-origin handoff
+            const token = generateSessionToken();
+            const expiresAt = Date.now() + 2 * 60 * 1000; // 2 minutes
+
+            // Store user profile data with token (not session ID, since each deployment has its own DB)
+            sessionTokenStore.set(token, {
+              user: user, // Store the complete user profile from Google OAuth
+              expiresAt,
+            });
+
+            console.log(
+              `[OAUTH-PROXY] Generated session token for cross-origin handoff (expires in 2min)`,
+            );
+
+            // Redirect to preview with token
+            const returnUrl = new URL(returnTo);
+            returnUrl.searchParams.set("session_token", token);
+            return res.redirect(returnUrl.toString());
+          }
+
+          // Normal flow: redirect to dashboard
           res.redirect("/api");
         });
       });
     });
   })(req, res, next);
+});
+
+// OAuth proxy flow: Exchange one-time token for session (for preview deployments)
+app.get("/api/auth/session", (req, res) => {
+  const token = req.query.session_token;
+
+  if (!token) {
+    console.warn(`[OAUTH-PROXY] Session token missing from IP: ${req.ip}`);
+    return res.status(400).send("Missing session token");
+  }
+
+  // Retrieve user data from token store
+  const tokenData = sessionTokenStore.get(token);
+
+  if (!tokenData) {
+    console.warn(`[OAUTH-PROXY] Invalid or expired session token from IP: ${req.ip}`);
+    return res.status(401).send("Invalid or expired session token");
+  }
+
+  // Check if token has expired
+  if (Date.now() > tokenData.expiresAt) {
+    sessionTokenStore.delete(token);
+    console.warn(`[OAUTH-PROXY] Expired session token from IP: ${req.ip}`);
+    return res.status(401).send("Session token expired");
+  }
+
+  // Delete one-time token (it can only be used once)
+  sessionTokenStore.delete(token);
+
+  const user = tokenData.user;
+
+  // Create session for the user on this deployment
+  req.logIn(user, { session: true }, (err) => {
+    if (err) {
+      console.error("[OAUTH-PROXY] Session creation error:", err);
+      return res.status(500).send("Failed to create session");
+    }
+
+    // Save session explicitly
+    req.session.save((saveErr) => {
+      if (saveErr) {
+        console.error("[OAUTH-PROXY] Session save error:", saveErr);
+        return res.status(500).send("Failed to save session");
+      }
+
+      console.log(
+        `[OAUTH-PROXY] Successfully created session for user: ${user.id || user.emails?.[0]?.value || "unknown"} from IP: ${req.ip}`,
+      );
+
+      // Set cache headers and redirect to dashboard
+      res.set({
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      });
+
+      res.redirect("/api");
+    });
+  });
 });
 
 app.get("/api/logout", (req, res) => {

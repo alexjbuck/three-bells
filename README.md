@@ -92,6 +92,50 @@ VERCEL_PROJECT_PRODUCTION_URL="your-app.vercel.app"
    - Development: `http://localhost:3000/api/auth/callback`
    - Production: `https://your-app.vercel.app/api/auth/callback`
 
+### OAuth Proxy Flow for Preview Deployments
+
+Google OAuth does not support wildcard redirect URIs, which means preview deployments (e.g., `https://myapp-git-branch-team.vercel.app`) cannot directly authenticate with Google. This application implements an OAuth proxy flow to solve this problem:
+
+#### How It Works
+
+1. **User on preview deployment clicks "Sign in with Google"**
+   - The frontend JavaScript detects it's on a preview deployment (not production)
+   - The login button is automatically modified to redirect to production with a `return_to` parameter
+
+2. **OAuth flow happens on production**
+   - Production initiates OAuth with Google (using the registered redirect URI)
+   - The `return_to` parameter (preview URL) is stored in the session
+
+3. **After successful authentication**
+   - Production generates a one-time session token
+   - Production redirects back to the preview URL with the token as a query parameter
+
+4. **Preview deployment exchanges token for session**
+   - The preview's frontend detects the `session_token` parameter
+   - It calls `/api/auth/session` on its own domain to exchange the token
+   - A new session is created on the preview deployment with the user's data
+
+#### Security Features
+
+- **Origin validation**: Only production and Vercel preview deployments are allowed as `return_to` URLs
+- **One-time tokens**: Session tokens expire after 2 minutes and can only be used once
+- **Encrypted state**: All state parameters are encrypted using AES-256-GCM
+- **Token cleanup**: Expired tokens are automatically cleaned up every 5 minutes
+
+#### Implementation Details
+
+The proxy flow is implemented in:
+- `/api/auth/google` - Accepts and validates `return_to` parameter
+- `/api/auth/callback` - Generates session token and redirects to preview
+- `/api/auth/session` - Exchanges token for session on preview deployment
+- Frontend JavaScript - Automatically handles token exchange and login URL modification
+
+#### Important Notes
+
+- **Session tokens are stored in-memory** on the production instance. In high-traffic scenarios or multi-instance deployments, consider using Redis or a database for token storage.
+- **Each Vercel deployment has its own database** (via Neon branching), so sessions are independent between production and preview deployments.
+- **The flow is automatic** - no manual configuration needed. Preview deployments automatically use the proxy flow.
+
 ## Development
 
 ### Running Locally
