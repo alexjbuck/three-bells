@@ -39,12 +39,14 @@ Three Bells helps Navy Reserve personnel track training hours, bundle them into 
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/alexjbuck/three-bells.git
 cd three-bells
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
@@ -52,6 +54,7 @@ npm install
 3. Set up your environment variables (see Configuration below)
 
 4. Run database migrations:
+
 ```bash
 npx prisma migrate deploy
 npx prisma generate
