@@ -139,6 +139,14 @@ const validateCSRFToken = (req) => {
 
 // MAIN ROUTE
 app.get("/", async (req, res) => {
+  // Prevent caching - redirects should not be cached
+  // Vercel-CDN-Cache-Control prevents Vercel's edge cache from caching this response
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
   // redirect to /api
   res.redirect("/api");
 });
@@ -147,8 +155,10 @@ const packageJson = require("../package.json");
 app.get("/api", async (req, res) => {
   try {
     // Prevent caching - this endpoint serves different content based on auth state
+    // Vercel-CDN-Cache-Control prevents Vercel's edge cache from caching this response
     res.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
       Expires: "0",
     });
@@ -1287,35 +1297,57 @@ app.post("/api/delete/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get(
-  "/api/auth/google",
-  (req, res, next) => {
-    res.set({
+app.get("/api/auth/google", (req, res, next) => {
+  // Intercept redirect to ensure cache headers are set
+  const originalRedirect = res.redirect;
+  res.redirect = function (url) {
+    this.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
       Expires: "0",
     });
-    next();
-  },
-  passport.authenticate("google", { scope: ["profile", "email"] }),
-);
+    return originalRedirect.call(this, url);
+  };
+  // Set cache headers before Passport redirects
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+});
 
-app.get(
-  "/api/auth/callback",
-  (req, res, next) => {
-    res.set({
+app.get("/api/auth/callback", (req, res, next) => {
+  // Intercept redirect to ensure cache headers are set
+  const originalRedirect = res.redirect;
+  res.redirect = function (url) {
+    this.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
       Expires: "0",
     });
-    next();
-  },
-  passport.authenticate("google", { successRedirect: "/api", failureRedirect: "/api" }),
-);
+    return originalRedirect.call(this, url);
+  };
+  // Set cache headers before Passport processes callback
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+  passport.authenticate("google", {
+    successRedirect: "/api",
+    failureRedirect: "/api",
+  })(req, res, next);
+});
 
 app.get("/api/logout", (req, res) => {
   res.set({
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
     Pragma: "no-cache",
     Expires: "0",
   });

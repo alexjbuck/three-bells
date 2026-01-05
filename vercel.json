@@ -4,11 +4,36 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "headers": [
     {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, private"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
       "source": "/api",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "no-store, no-cache, must-revalidate, private"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
         },
         {
           "key": "Pragma",
@@ -26,6 +51,10 @@
         {
           "key": "Cache-Control",
           "value": "no-store, no-cache, must-revalidate, private"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
         },
         {
           "key": "Pragma",
