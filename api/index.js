@@ -10,6 +10,9 @@ const crypto = require("node:crypto");
 const prisma = new PrismaClient();
 const app = express();
 
+// Trust proxy - required for Vercel to detect HTTPS and set secure cookies
+app.set("trust proxy", 1);
+
 // Middleware
 app.use(compression()); // Compress responses
 app.use(express.urlencoded({ extended: true }));
@@ -1339,16 +1342,17 @@ app.get("/api/auth/callback", (req, res, next) => {
     if (!user) {
       return res.redirect("/api");
     }
-    // Log in the user
-    req.logIn(user, (loginErr) => {
+    // Log in the user - this automatically saves the session
+    req.logIn(user, { session: true }, (loginErr) => {
       if (loginErr) {
         console.error("Login error:", loginErr);
         return res.redirect("/api");
       }
-      // Ensure session is saved before redirecting
+      // Explicitly save session to ensure cookie is set before redirect
       req.session.save((saveErr) => {
         if (saveErr) {
           console.error("Session save error:", saveErr);
+          return res.redirect("/api");
         }
         // Set cache headers on redirect response
         res.set({
