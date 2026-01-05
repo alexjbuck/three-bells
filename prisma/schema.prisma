@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Rmp {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String
+  filedDate DateTime
+  status    String   @default("submitted")
+  logs      Log[]
+}
+
+model Log {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String
+  hours     Float
+  start     DateTime
+  end       DateTime
+  rmpId     String?  @db.Uuid
+  rmp       Rmp?     @relation(fields: [rmpId], references: [id], onDelete: SetNull)
+}
+
+// Required for the session store
+model Session {
+  id        String   @id
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
+}
