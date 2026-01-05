@@ -943,6 +943,18 @@ app.get("/api", async (req, res) => {
                     transition: all 0.2s;
                     font-family: inherit;
                     min-width: 100px;
+                    flex: 1;
+                    max-width: 150px;
+                }
+                @media (max-width: 480px) {
+                    .timer-btn {
+                        padding: 12px 16px;
+                        font-size: 0.9em;
+                        min-width: 80px;
+                    }
+                    .timer-controls {
+                        gap: 8px;
+                    }
                 }
                 .timer-btn-start {
                     background: #28a745;
