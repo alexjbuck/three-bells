@@ -790,7 +790,8 @@ app.get("/api", async (req, res) => {
                 }
                 input[type="date"],
                 input[type="time"],
-                input[type="number"] {
+                input[type="number"],
+                input[type="text"].note-input {
                     width: 100%;
                     padding: 12px;
                     border: 2px solid #e0e0e0;
@@ -798,6 +799,7 @@ app.get("/api", async (req, res) => {
                     font-size: 1em;
                     transition: border-color 0.2s;
                     font-family: inherit;
+                    box-sizing: border-box;
                 }
                 input:focus {
                     outline: none;
@@ -912,6 +914,18 @@ app.get("/api", async (req, res) => {
                     color: #002447;
                     margin-bottom: 8px;
                 }
+                .rmp-notes {
+                    font-size: 0.85em;
+                    color: #555;
+                    font-style: italic;
+                    margin: 8px 0;
+                    padding: 6px 10px;
+                    background: #f8f9fa;
+                    border-radius: 6px;
+                    max-height: 60px;
+                    overflow-y: auto;
+                    word-break: break-word;
+                }
                 .rmp-badge {
                     display: inline-block;
                     font-size: 0.75em;
@@ -969,6 +983,16 @@ app.get("/api", async (req, res) => {
                     color: #666;
                     font-size: 0.85em;
                     margin-top: 4px;
+                }
+                .history-note {
+                    color: #555;
+                    font-size: 0.85em;
+                    margin-top: 4px;
+                    font-style: italic;
+                    max-width: 200px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
                 }
                 .history-hours {
                     font-weight: 600;
@@ -1192,8 +1216,14 @@ app.get("/api", async (req, res) => {
                         <div class="form-group">
                             <div class="manual-input">
                                 <input type="number" step="0.1" name="manualHours" value="${editLog && editLog.start.getTime() === editLog.end.getTime() ? editLog.hours : ""}" placeholder="Hours" style="flex:1;">
-                                <button type="submit" class="btn btn-primary">${editLog ? "Save" : "Log"}</button>
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Note (optional)</label>
+                            <input type="text" name="note" value="${editLog?.note ? escapeHtml(editLog.note) : ""}" placeholder="What did you work on?" maxlength="500" class="note-input">
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" style="width:100%;">${editLog ? "Save" : "Log"}</button>
                         </div>
                         ${editLog ? `<a href="/api" class="btn btn-link" style="display:block; text-align:center; margin-top:12px;">Cancel</a>` : ""}
                     </form>
@@ -1215,6 +1245,7 @@ app.get("/api", async (req, res) => {
                             <strong>Filed: ${displayDate}</strong>
                             <span class="rmp-badge ${r.status === "paid" ? "paid" : "pending"}">${r.status}</span>
                         </div>
+                        ${r.notes ? `<div class="rmp-notes">${escapeHtml(r.notes)}</div>` : ""}
                         <div class="rmp-actions">
                             <form action="/api/rmp/toggle-paid/${r.id}" method="POST" style="display:inline;">
                                 <input type="hidden" name="_csrf" value="${csrfToken}">
@@ -1243,6 +1274,7 @@ app.get("/api", async (req, res) => {
                             <td>
                                 <div class="history-date">${l.start.toLocaleDateString()}</div>
                                 <div class="history-time">${l.start.getTime() === l.end.getTime() ? "Manual entry" : l.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " - " + l.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                                ${l.note ? `<div class="history-note">${escapeHtml(l.note)}</div>` : ""}
                             </td>
                             <td class="history-hours">${l.hours}h</td>
                             <td class="history-actions">
@@ -1491,12 +1523,15 @@ app.get("/api", async (req, res) => {
 
 // LOGIC HELPERS
 const getTimes = (body) => {
-  const { workDate, startTime, endTime, manualHours } = body;
+  const { workDate, startTime, endTime, manualHours, note } = body;
 
   // Validate workDate
   if (!isValidDate(workDate)) {
     throw new Error("Invalid work date format");
   }
+
+  // Process note - trim and limit length, null if empty
+  const processedNote = note?.trim()?.slice(0, 500) || null;
 
   if (manualHours) {
     // Validate manual hours
@@ -1504,7 +1539,12 @@ const getTimes = (body) => {
       throw new Error("Invalid manual hours (must be between 0 and 24)");
     }
     const d = new Date(`${workDate}T12:00:00`);
-    return { hours: cleanNum(Number.parseFloat(manualHours)), start: d, end: d };
+    return {
+      hours: cleanNum(Number.parseFloat(manualHours)),
+      start: d,
+      end: d,
+      note: processedNote,
+    };
   }
 
   // Validate time inputs
@@ -1525,7 +1565,7 @@ const getTimes = (body) => {
     throw new Error("Invalid time range (must be between 0 and 24 hours)");
   }
 
-  return { hours, start, end };
+  return { hours, start, end, note: processedNote };
 };
 
 // HANDLERS
@@ -1603,8 +1643,23 @@ app.post("/api/submit-unit", requireAuth, async (req, res) => {
         // Parse date string (YYYY-MM-DD) and create at UTC midnight for timezone independence
         const [year, month, day] = req.body.filedDate.split("-").map(Number);
         const filedDate = new Date(Date.UTC(year, month - 1, day));
-        const rmp = await tx.rmp.create({ data: { userId: req.user.id, filedDate } });
+
+        // Collect notes from logs that will be bundled
+        const bundledNotes = [];
         let needed = 3;
+        for (const log of earned) {
+          if (needed <= 0) break;
+          if (log.note) {
+            bundledNotes.push(log.note);
+          }
+          needed = log.hours <= needed ? cleanNum(needed - log.hours) : 0;
+        }
+
+        // Create RMP with summarized notes
+        const notes = bundledNotes.length > 0 ? bundledNotes.join(" | ") : null;
+        const rmp = await tx.rmp.create({ data: { userId: req.user.id, filedDate, notes } });
+
+        needed = 3;
         for (const log of earned) {
           if (needed <= 0) break;
           if (log.hours <= needed) {
@@ -1614,7 +1669,13 @@ app.post("/api/submit-unit", requireAuth, async (req, res) => {
             const remainder = cleanNum(log.hours - needed);
             await tx.log.update({ where: { id: log.id }, data: { hours: needed, rmpId: rmp.id } });
             await tx.log.create({
-              data: { userId: req.user.id, hours: remainder, start: log.start, end: log.end },
+              data: {
+                userId: req.user.id,
+                hours: remainder,
+                start: log.start,
+                end: log.end,
+                note: log.note,
+              },
             });
             needed = 0;
           }
