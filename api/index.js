@@ -97,10 +97,15 @@ function isValidRedirectUrl(url) {
       return true;
     }
 
-    // Allow Vercel preview deployments (*.vercel.app)
-    // These follow the pattern: project-name-git-branch-team.vercel.app
+    // Allow Vercel preview deployments for this project only
+    // Pattern: three-bells-git-{branch}-alexjbucks-projects.vercel.app
     if (hostname.endsWith(".vercel.app")) {
-      return true;
+      if (
+        hostname === "three-bells.vercel.app" ||
+        (hostname.startsWith("three-bells-git-") && hostname.includes("-alexjbucks-projects"))
+      ) {
+        return true;
+      }
     }
 
     return false;
