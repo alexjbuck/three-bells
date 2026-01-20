@@ -62,6 +62,7 @@ jobs:
   cleanup:
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Delete Neon branch
         uses: neondatabase/delete-branch-action@v3
