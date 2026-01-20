@@ -12,6 +12,7 @@ model Rmp {
   userId    String
   filedDate DateTime
   status    String   @default("submitted")
+  notes     String?
   logs      Log[]
 
   @@index([userId])
@@ -25,6 +26,7 @@ model Log {
   hours     Float
   start     DateTime
   end       DateTime
+  note      String?
   rmpId     String?  @db.Uuid
   rmp       Rmp?     @relation(fields: [rmpId], references: [id], onDelete: SetNull)
 
