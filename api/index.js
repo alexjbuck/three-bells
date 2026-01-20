@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
 const session = require("express-session");
 const passport = require("passport");
@@ -13,6 +14,17 @@ const app = express();
 
 // Trust proxy - required for Vercel to detect HTTPS and set secure cookies
 app.set("trust proxy", 1);
+
+// Serve static files from public directory (for PWA assets)
+app.use(express.static(path.join(__dirname, "..", "public"), {
+  maxAge: "1d",
+  setHeaders: (res, filePath) => {
+    // Service worker should not be cached aggressively
+    if (filePath.endsWith("service-worker.js")) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    }
+  }
+}));
 
 // Security headers middleware
 app.use((req, res, next) => {
@@ -296,7 +308,6 @@ app.get("/", async (req, res) => {
 });
 const packageJson = require("../package.json");
 const fs = require("node:fs");
-const path = require("node:path");
 
 app.get("/api", async (req, res) => {
   try {
@@ -320,6 +331,13 @@ app.get("/api", async (req, res) => {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <meta name="description" content="Track and manage your Navy Reserve RMP (Reserve Manpower Program) training hours. Log hours, bundle into RMPs, and track payment status.">
+                <meta name="theme-color" content="#002447">
+                <meta name="apple-mobile-web-app-capable" content="yes">
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+                <meta name="apple-mobile-web-app-title" content="Three Bells">
+                <link rel="manifest" href="/manifest.json">
+                <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+                <link rel="apple-touch-icon" href="/icons/icon-192.png">
                 <title>Three Bells - Navy Reserve RMP Tracker</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -511,6 +529,12 @@ app.get("/api", async (req, res) => {
                         </div>
                     </div>
                 </div>
+                <script>
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.register('/service-worker.js')
+                            .catch(err => console.error('SW registration failed:', err));
+                    }
+                </script>
             </body>
             </html>
         `;
@@ -586,6 +610,13 @@ app.get("/api", async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta name="description" content="Three Bells Dashboard - Manage your Navy Reserve RMP training hours, view unbundled balance, track submitted RMPs, and log new training entries.">
+            <meta name="theme-color" content="#002447">
+            <meta name="apple-mobile-web-app-capable" content="yes">
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+            <meta name="apple-mobile-web-app-title" content="Three Bells">
+            <link rel="manifest" href="/manifest.json">
+            <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+            <link rel="apple-touch-icon" href="/icons/icon-192.png">
             <title>Three Bells - Dashboard</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1512,6 +1543,12 @@ app.get("/api", async (req, res) => {
 
                     // Initialize timer on page load
                     loadTimerState();
+                }
+
+                // Register service worker for PWA
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/service-worker.js')
+                        .catch(err => console.error('SW registration failed:', err));
                 }
             </script>
         </body>
