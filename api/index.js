@@ -922,9 +922,10 @@ app.get("/api", async (req, res) => {
                     padding: 6px 10px;
                     background: #f8f9fa;
                     border-radius: 6px;
-                    max-height: 60px;
+                    max-height: 80px;
                     overflow-y: auto;
                     word-break: break-word;
+                    white-space: pre-line;
                 }
                 .rmp-badge {
                     display: inline-block;
@@ -1655,8 +1656,8 @@ app.post("/api/submit-unit", requireAuth, async (req, res) => {
           needed = log.hours <= needed ? cleanNum(needed - log.hours) : 0;
         }
 
-        // Create RMP with summarized notes
-        const notes = bundledNotes.length > 0 ? bundledNotes.join(" | ") : null;
+        // Create RMP with summarized notes as bullet list
+        const notes = bundledNotes.length > 0 ? bundledNotes.map((n) => `• ${n}`).join("\n") : null;
         const rmp = await tx.rmp.create({ data: { userId: req.user.id, filedDate, notes } });
 
         needed = 3;
