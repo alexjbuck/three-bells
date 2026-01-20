@@ -6,6 +6,7 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
 const compression = require("compression");
 const crypto = require("node:crypto");
+const rateLimit = require("express-rate-limit");
 
 const prisma = new PrismaClient();
 const app = express();
@@ -167,6 +168,21 @@ function verifyAuthToken(token) {
     return null;
   }
 }
+
+// Rate limiter for auth endpoints to prevent brute-force attempts
+const authRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 10, // max 10 requests per minute per IP
+  message: "Too many requests",
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.warn(
+      `[SECURITY] Rate limit exceeded for IP: ${req.ip || req.connection.remoteAddress}`,
+    );
+    res.status(429).send("Too many requests");
+  },
+});
 
 const cleanNum = (n) => Math.round(n * 100) / 100;
 
@@ -1722,7 +1738,7 @@ app.post("/api/delete/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/auth/google", (req, res, next) => {
+app.get("/api/auth/google", authRateLimiter, (req, res, next) => {
   // Log auth attempt
   console.log(`[SECURITY] OAuth initiation from IP: ${req.ip || req.connection.remoteAddress}`);
   // Intercept redirect to ensure cache headers are set
@@ -1859,7 +1875,7 @@ app.get("/api/auth/callback", (req, res, next) => {
 // Handle cross-origin auth token for preview branch OAuth flow
 // This endpoint receives a signed token from prod after OAuth completes,
 // verifies it, and creates a local session in the preview branch's database
-app.get("/api/auth/token", (req, res) => {
+app.get("/api/auth/token", authRateLimiter, (req, res) => {
   res.set({
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
     "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
