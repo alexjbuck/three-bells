@@ -60,6 +60,7 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
+
 const baseUrl = isProd
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : "http://localhost:3000";
@@ -77,6 +78,90 @@ passport.use(
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
+
+// Validate redirect URLs to prevent open redirect attacks
+// Allows: localhost (dev), production URL, and Vercel preview deployments
+function isValidRedirectUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+
+    // Allow localhost for development
+    if (hostname === "localhost") {
+      return true;
+    }
+
+    // Allow production URL
+    const prodUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    if (prodUrl && hostname === prodUrl) {
+      return true;
+    }
+
+    // Allow Vercel preview deployments (*.vercel.app)
+    // These follow the pattern: project-name-git-branch-team.vercel.app
+    if (hostname.endsWith(".vercel.app")) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Create a signed token for cross-origin auth (preview branch redirects)
+// Token format: base64url(payload).base64url(signature)
+// Expires after 60 seconds to prevent replay attacks
+function createAuthToken(user) {
+  const payload = {
+    id: user.id,
+    displayName: user.displayName,
+    emails: user.emails,
+    exp: Date.now() + 60 * 1000, // 60 second expiry
+  };
+  const payloadStr = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto
+    .createHmac("sha256", process.env.SESSION_SECRET)
+    .update(payloadStr)
+    .digest("base64url");
+  return `${payloadStr}.${signature}`;
+}
+
+// Verify and decode an auth token
+// Returns user object if valid, null if invalid/expired
+function verifyAuthToken(token) {
+  try {
+    const [payloadStr, signature] = token.split(".");
+    if (!payloadStr || !signature) return null;
+
+    const expectedSig = crypto
+      .createHmac("sha256", process.env.SESSION_SECRET)
+      .update(payloadStr)
+      .digest("base64url");
+
+    // Timing-safe comparison to prevent timing attacks
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadStr, "base64url").toString());
+
+    // Check expiry
+    if (payload.exp < Date.now()) {
+      console.warn("[SECURITY] Auth token expired");
+      return null;
+    }
+
+    return {
+      id: payload.id,
+      displayName: payload.displayName,
+      emails: payload.emails,
+    };
+  } catch (e) {
+    console.warn("[SECURITY] Auth token verification failed:", e.message);
+    return null;
+  }
+}
 
 const cleanNum = (n) => Math.round(n * 100) / 100;
 
@@ -1653,7 +1738,18 @@ app.get("/api/auth/google", (req, res, next) => {
     Pragma: "no-cache",
     Expires: "0",
   });
-  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+
+  // Capture the origin URL for redirect after OAuth completes
+  // This enables preview branch deployments to work with OAuth
+  const protocol = req.protocol;
+  const host = req.get("host");
+  const returnUrl = `${protocol}://${host}/api`;
+  const state = Buffer.from(JSON.stringify({ returnUrl })).toString("base64url");
+
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    state,
+  })(req, res, next);
 });
 
 app.get("/api/auth/callback", (req, res, next) => {
@@ -1664,6 +1760,23 @@ app.get("/api/auth/callback", (req, res, next) => {
     Pragma: "no-cache",
     Expires: "0",
   });
+
+  // Decode the state parameter to get the return URL
+  let returnUrl = "/api";
+  if (req.query.state) {
+    try {
+      const state = JSON.parse(Buffer.from(req.query.state, "base64url").toString());
+      if (state.returnUrl && isValidRedirectUrl(state.returnUrl)) {
+        returnUrl = state.returnUrl;
+        console.log(`[SECURITY] OAuth callback will redirect to: ${returnUrl}`);
+      } else if (state.returnUrl) {
+        console.warn(`[SECURITY] Rejected invalid redirect URL: ${state.returnUrl}`);
+      }
+    } catch (e) {
+      console.warn("[SECURITY] Failed to decode OAuth state:", e.message);
+    }
+  }
+
   // Use custom callback to ensure session is saved before redirecting
   passport.authenticate("google", (err, user, _info) => {
     if (err) {
@@ -1708,11 +1821,74 @@ app.get("/api/auth/callback", (req, res, next) => {
             Pragma: "no-cache",
             Expires: "0",
           });
-          res.redirect("/api");
+
+          // If redirecting cross-origin (e.g., to a preview branch), include auth token
+          // so the target can create its own session via /api/auth/token
+          let finalUrl = returnUrl;
+          if (returnUrl !== "/api") {
+            try {
+              const currentHost = req.get("host");
+              const targetUrl = new URL(returnUrl);
+              if (targetUrl.hostname !== currentHost) {
+                const token = createAuthToken(user);
+                // Redirect to /api/auth/token on the target with the token
+                targetUrl.pathname = "/api/auth/token";
+                targetUrl.searchParams.set("token", token);
+                finalUrl = targetUrl.toString();
+                console.log(
+                  `[SECURITY] Cross-origin redirect with auth token to: ${targetUrl.hostname}`,
+                );
+              }
+            } catch (e) {
+              console.warn("[SECURITY] Failed to process cross-origin redirect:", e.message);
+            }
+          }
+
+          res.redirect(finalUrl);
         });
       });
     });
   })(req, res, next);
+});
+
+// Handle cross-origin auth token for preview branch OAuth flow
+// This endpoint receives a signed token from prod after OAuth completes,
+// verifies it, and creates a local session in the preview branch's database
+app.get("/api/auth/token", (req, res) => {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Vercel-CDN-Cache-Control": "no-store, no-cache, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+
+  const token = req.query.token;
+  if (!token) {
+    console.warn("[SECURITY] /api/auth/token called without token");
+    return res.redirect("/api");
+  }
+
+  const user = verifyAuthToken(token);
+  if (!user) {
+    console.warn("[SECURITY] /api/auth/token received invalid token");
+    return res.redirect("/api");
+  }
+
+  console.log(`[SECURITY] Creating session from auth token for user: ${user.id}`);
+
+  req.logIn(user, { session: true }, (err) => {
+    if (err) {
+      console.error("[SECURITY] Token login error:", err);
+      return res.redirect("/api");
+    }
+    req.session.save((saveErr) => {
+      if (saveErr) {
+        console.error("[SECURITY] Token session save error:", saveErr);
+      }
+      // Redirect to main app
+      res.redirect("/api");
+    });
+  });
 });
 
 app.get("/api/logout", (req, res) => {
