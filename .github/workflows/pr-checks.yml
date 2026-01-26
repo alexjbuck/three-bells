@@ -57,8 +57,7 @@ jobs:
       - name: Run Prisma migrations
         run: npx prisma migrate deploy || (sleep 5 && npx prisma migrate deploy)
         env:
-          DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}?sslmode=require
-          PRISMA_MIGRATE_LOCK_TIMEOUT: 30000
+          DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}
 
   cleanup:
     if: github.event.action == 'closed'
