@@ -99,11 +99,13 @@ function isValidRedirectUrl(url) {
     }
 
     // Allow Vercel preview deployments for this project only
-    // Pattern: three-bells-git-{branch}-alexjbucks-projects.vercel.app
+    // Patterns:
+    //   three-bells-git-{branch}-alexjbucks-projects.vercel.app (branch deploys)
+    //   three-bells-{hash}-alexjbucks-projects.vercel.app (PR/commit deploys)
     if (hostname.endsWith(".vercel.app")) {
       if (
         hostname === "three-bells.vercel.app" ||
-        (hostname.startsWith("three-bells-git-") && hostname.includes("-alexjbucks-projects"))
+        (hostname.startsWith("three-bells-") && hostname.includes("-alexjbucks-projects"))
       ) {
         return true;
       }
