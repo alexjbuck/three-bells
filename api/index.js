@@ -331,7 +331,7 @@ app.get("/api", async (req, res) => {
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
                 <meta name="description" content="Track and manage your Navy Reserve RMP (Reserve Manpower Program) training hours. Log hours, bundle into RMPs, and track payment status.">
                 <meta name="theme-color" content="#002447">
                 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -351,6 +351,7 @@ app.get("/api", async (req, res) => {
                         align-items: center;
                         justify-content: center;
                         padding: 20px;
+                        padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
                     }
                     .container {
                         background: white;
@@ -610,7 +611,7 @@ app.get("/api", async (req, res) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <meta name="description" content="Three Bells Dashboard - Manage your Navy Reserve RMP training hours, view unbundled balance, track submitted RMPs, and log new training entries.">
             <meta name="theme-color" content="#002447">
             <meta name="apple-mobile-web-app-capable" content="yes">
@@ -627,6 +628,7 @@ app.get("/api", async (req, res) => {
                     background: linear-gradient(135deg, #002447 0%, #003d6b 50%, #002447 100%);
                     min-height: 100vh;
                     padding: 20px;
+                    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
                 }
                 .container {
                     background: white;
@@ -2089,7 +2091,7 @@ app.get("/api/changelog", (req, res) => {
       <html lang="en">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
         <title>Changelog - Three Bells</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
