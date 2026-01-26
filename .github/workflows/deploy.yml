@@ -39,9 +39,10 @@ jobs:
         continue-on-error: true
 
       - name: Run Prisma Migrations
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy || (sleep 5 && npx prisma migrate deploy)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PRISMA_MIGRATE_LOCK_TIMEOUT: 30000
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
