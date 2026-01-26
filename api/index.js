@@ -351,7 +351,6 @@ app.get("/api", async (req, res) => {
                         align-items: center;
                         justify-content: center;
                         padding: 20px;
-                        padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
                     }
                     .container {
                         background: white;
@@ -628,7 +627,6 @@ app.get("/api", async (req, res) => {
                     background: linear-gradient(135deg, #002447 0%, #003d6b 50%, #002447 100%);
                     min-height: 100vh;
                     padding: 20px;
-                    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
                 }
                 .container {
                     background: white;
@@ -986,6 +984,8 @@ app.get("/api", async (req, res) => {
                 }
                 .history-table {
                     width: 100%;
+                    max-width: 100%;
+                    table-layout: fixed;
                     border-collapse: collapse;
                     background: white;
                     border-radius: 12px;
