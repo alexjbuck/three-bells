@@ -28,7 +28,7 @@
     "express-session": "^1.19.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "prisma": "^6.19.1"
+    "prisma": "^6.19.2"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
