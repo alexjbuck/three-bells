@@ -334,6 +334,7 @@ app.get("/api", async (req, res) => {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
                 <meta name="description" content="Track and manage your Navy Reserve RMP (Reserve Manpower Program) training hours. Log hours, bundle into RMPs, and track payment status.">
                 <meta name="theme-color" content="#002447">
+                <meta name="mobile-web-app-capable" content="yes">
                 <meta name="apple-mobile-web-app-capable" content="yes">
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
                 <meta name="apple-mobile-web-app-title" content="Three Bells">
@@ -613,7 +614,8 @@ app.get("/api", async (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <meta name="description" content="Three Bells Dashboard - Manage your Navy Reserve RMP training hours, view unbundled balance, track submitted RMPs, and log new training entries.">
             <meta name="theme-color" content="#002447">
-            <meta name="apple-mobile-web-app-capable" content="yes">
+            <meta name="mobile-web-app-capable" content="yes">
+                <meta name="apple-mobile-web-app-capable" content="yes">
             <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
             <meta name="apple-mobile-web-app-title" content="Three Bells">
             <link rel="manifest" href="/manifest.json">
