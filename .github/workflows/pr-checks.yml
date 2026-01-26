@@ -29,7 +29,7 @@ jobs:
         run: npm run checks
 
   migrate:
-    if: github.event.action != 'closed'
+    if: github.event.action != 'closed' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,7 +60,7 @@ jobs:
           DATABASE_URL: ${{ steps.neon.outputs.db_url_with_pooler }}
 
   cleanup:
-    if: github.event.action == 'closed'
+    if: github.event.action == 'closed' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions: {}
     steps:
