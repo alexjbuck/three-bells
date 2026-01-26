@@ -1150,6 +1150,32 @@ app.get("/api", async (req, res) => {
                 .card-header-with-timer h3 {
                     margin: 0;
                 }
+                .install-btn {
+                    display: none;
+                    align-items: center;
+                    gap: 6px;
+                    background: #ffc107;
+                    color: #002447;
+                    border: none;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 0.85em;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    margin-right: 12px;
+                }
+                .install-btn:hover {
+                    background: #ffb300;
+                    transform: translateY(-1px);
+                }
+                .install-btn.show {
+                    display: flex;
+                }
+                .header-right {
+                    display: flex;
+                    align-items: center;
+                }
             </style>
         </head>
         <body>
@@ -1168,20 +1194,25 @@ app.get("/api", async (req, res) => {
                             </a>
                         </div>
                     </div>
-                    <div class="profile-container">
-                        <button id="profileBtn" class="profile-btn">
-                            ${
-                              userPhotoUrl
-                                ? `<img src="${userPhotoUrl}" alt="Profile" class="profile-img">`
-                                : `<div class="profile-avatar">${userInitial}</div>`
-                            }
+                    <div class="header-right">
+                        <button id="installBtn" class="install-btn">
+                            📲 Install
                         </button>
-                        <div id="profileDropdown" class="profile-dropdown">
-                            <div class="profile-info">
-                                <div class="profile-name">${userDisplayName}</div>
-                                <div class="profile-email">${userEmail}</div>
+                        <div class="profile-container">
+                            <button id="profileBtn" class="profile-btn">
+                                ${
+                                  userPhotoUrl
+                                    ? `<img src="${userPhotoUrl}" alt="Profile" class="profile-img">`
+                                    : `<div class="profile-avatar">${userInitial}</div>`
+                                }
+                            </button>
+                            <div id="profileDropdown" class="profile-dropdown">
+                                <div class="profile-info">
+                                    <div class="profile-name">${userDisplayName}</div>
+                                    <div class="profile-email">${userEmail}</div>
+                                </div>
+                                <a href="/api/logout" class="profile-logout">Logout</a>
                             </div>
-                            <a href="/api/logout" class="profile-logout">Logout</a>
                         </div>
                     </div>
                 </div>
@@ -1560,13 +1591,34 @@ app.get("/api", async (req, res) => {
 
                 // PWA install prompt handling
                 let deferredPrompt;
+                const installBtn = document.getElementById('installBtn');
+
                 window.addEventListener('beforeinstallprompt', (e) => {
                     console.log('beforeinstallprompt fired');
+                    e.preventDefault();
                     deferredPrompt = e;
+                    if (installBtn) {
+                        installBtn.classList.add('show');
+                    }
                 });
+
+                if (installBtn) {
+                    installBtn.addEventListener('click', async () => {
+                        if (!deferredPrompt) return;
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log('Install prompt outcome:', outcome);
+                        deferredPrompt = null;
+                        installBtn.classList.remove('show');
+                    });
+                }
+
                 window.addEventListener('appinstalled', () => {
                     console.log('PWA installed');
                     deferredPrompt = null;
+                    if (installBtn) {
+                        installBtn.classList.remove('show');
+                    }
                 });
             </script>
         </body>
