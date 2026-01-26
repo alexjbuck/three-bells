@@ -97,10 +97,12 @@ VERCEL_PROJECT_PRODUCTION_URL="your-app.vercel.app"
 ### Running Locally
 
 ```bash
-npm start
+vercel dev
 ```
 
 The application will be available at `http://localhost:3000`
+
+> **Note:** You'll need the [Vercel CLI](https://vercel.com/docs/cli) installed (`npm i -g vercel`) and to be logged in (`vercel login`).
 
 ### Code Quality
 
