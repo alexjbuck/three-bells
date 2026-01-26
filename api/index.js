@@ -16,15 +16,17 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Serve static files from public directory (for PWA assets)
-app.use(express.static(path.join(__dirname, "..", "public"), {
-  maxAge: "1d",
-  setHeaders: (res, filePath) => {
-    // Service worker should not be cached aggressively
-    if (filePath.endsWith("service-worker.js")) {
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    }
-  }
-}));
+app.use(
+  express.static(path.join(__dirname, "..", "public"), {
+    maxAge: "1d",
+    setHeaders: (res, filePath) => {
+      // Service worker should not be cached aggressively
+      if (filePath.endsWith("service-worker.js")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }),
+);
 
 // Security headers middleware
 app.use((req, res, next) => {
