@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
 const session = require("express-session");
 const passport = require("passport");
@@ -13,6 +14,19 @@ const app = express();
 
 // Trust proxy - required for Vercel to detect HTTPS and set secure cookies
 app.set("trust proxy", 1);
+
+// Serve static files from public directory (for PWA assets)
+app.use(
+  express.static(path.join(__dirname, "..", "public"), {
+    maxAge: "1d",
+    setHeaders: (res, filePath) => {
+      // Service worker should not be cached aggressively
+      if (filePath.endsWith("service-worker.js")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }),
+);
 
 // Security headers middleware
 app.use((req, res, next) => {
@@ -296,7 +310,6 @@ app.get("/", async (req, res) => {
 });
 const packageJson = require("../package.json");
 const fs = require("node:fs");
-const path = require("node:path");
 
 app.get("/api", async (req, res) => {
   try {
@@ -318,8 +331,16 @@ app.get("/api", async (req, res) => {
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
                 <meta name="description" content="Track and manage your Navy Reserve RMP (Reserve Manpower Program) training hours. Log hours, bundle into RMPs, and track payment status.">
+                <meta name="theme-color" content="#002447">
+                <meta name="mobile-web-app-capable" content="yes">
+                <meta name="apple-mobile-web-app-capable" content="yes">
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+                <meta name="apple-mobile-web-app-title" content="Three Bells">
+                <link rel="manifest" href="/manifest.json">
+                <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+                <link rel="apple-touch-icon" href="/icons/icon-192.png">
                 <title>Three Bells - Navy Reserve RMP Tracker</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -511,6 +532,12 @@ app.get("/api", async (req, res) => {
                         </div>
                     </div>
                 </div>
+                <script>
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.register('/service-worker.js')
+                            .catch(err => console.error('SW registration failed:', err));
+                    }
+                </script>
             </body>
             </html>
         `;
@@ -584,8 +611,16 @@ app.get("/api", async (req, res) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
             <meta name="description" content="Three Bells Dashboard - Manage your Navy Reserve RMP training hours, view unbundled balance, track submitted RMPs, and log new training entries.">
+            <meta name="theme-color" content="#002447">
+            <meta name="mobile-web-app-capable" content="yes">
+                <meta name="apple-mobile-web-app-capable" content="yes">
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+            <meta name="apple-mobile-web-app-title" content="Three Bells">
+            <link rel="manifest" href="/manifest.json">
+            <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+            <link rel="apple-touch-icon" href="/icons/icon-192.png">
             <title>Three Bells - Dashboard</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -951,6 +986,8 @@ app.get("/api", async (req, res) => {
                 }
                 .history-table {
                     width: 100%;
+                    max-width: 100%;
+                    table-layout: fixed;
                     border-collapse: collapse;
                     background: white;
                     border-radius: 12px;
@@ -1113,6 +1150,32 @@ app.get("/api", async (req, res) => {
                 .card-header-with-timer h3 {
                     margin: 0;
                 }
+                .install-btn {
+                    display: none;
+                    align-items: center;
+                    gap: 6px;
+                    background: #ffc107;
+                    color: #002447;
+                    border: none;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 0.85em;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    margin-right: 12px;
+                }
+                .install-btn:hover {
+                    background: #ffb300;
+                    transform: translateY(-1px);
+                }
+                .install-btn.show {
+                    display: flex;
+                }
+                .header-right {
+                    display: flex;
+                    align-items: center;
+                }
             </style>
         </head>
         <body>
@@ -1131,20 +1194,25 @@ app.get("/api", async (req, res) => {
                             </a>
                         </div>
                     </div>
-                    <div class="profile-container">
-                        <button id="profileBtn" class="profile-btn">
-                            ${
-                              userPhotoUrl
-                                ? `<img src="${userPhotoUrl}" alt="Profile" class="profile-img">`
-                                : `<div class="profile-avatar">${userInitial}</div>`
-                            }
+                    <div class="header-right">
+                        <button id="installBtn" class="install-btn">
+                            📲 Install
                         </button>
-                        <div id="profileDropdown" class="profile-dropdown">
-                            <div class="profile-info">
-                                <div class="profile-name">${userDisplayName}</div>
-                                <div class="profile-email">${userEmail}</div>
+                        <div class="profile-container">
+                            <button id="profileBtn" class="profile-btn">
+                                ${
+                                  userPhotoUrl
+                                    ? `<img src="${userPhotoUrl}" alt="Profile" class="profile-img">`
+                                    : `<div class="profile-avatar">${userInitial}</div>`
+                                }
+                            </button>
+                            <div id="profileDropdown" class="profile-dropdown">
+                                <div class="profile-info">
+                                    <div class="profile-name">${userDisplayName}</div>
+                                    <div class="profile-email">${userEmail}</div>
+                                </div>
+                                <a href="/api/logout" class="profile-logout">Logout</a>
                             </div>
-                            <a href="/api/logout" class="profile-logout">Logout</a>
                         </div>
                     </div>
                 </div>
@@ -1513,6 +1581,45 @@ app.get("/api", async (req, res) => {
                     // Initialize timer on page load
                     loadTimerState();
                 }
+
+                // Register service worker for PWA
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/service-worker.js')
+                        .then(reg => console.log('SW registered:', reg.scope))
+                        .catch(err => console.error('SW registration failed:', err));
+                }
+
+                // PWA install prompt handling
+                let deferredPrompt;
+                const installBtn = document.getElementById('installBtn');
+
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    console.log('beforeinstallprompt fired');
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    if (installBtn) {
+                        installBtn.classList.add('show');
+                    }
+                });
+
+                if (installBtn) {
+                    installBtn.addEventListener('click', async () => {
+                        if (!deferredPrompt) return;
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log('Install prompt outcome:', outcome);
+                        deferredPrompt = null;
+                        installBtn.classList.remove('show');
+                    });
+                }
+
+                window.addEventListener('appinstalled', () => {
+                    console.log('PWA installed');
+                    deferredPrompt = null;
+                    if (installBtn) {
+                        installBtn.classList.remove('show');
+                    }
+                });
             </script>
         </body>
         </html>
@@ -2050,7 +2157,7 @@ app.get("/api/changelog", (req, res) => {
       <html lang="en">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
         <title>Changelog - Three Bells</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }

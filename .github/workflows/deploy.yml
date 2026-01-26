@@ -39,7 +39,7 @@ jobs:
         continue-on-error: true
 
       - name: Run Prisma Migrations
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy || (sleep 5 && npx prisma migrate deploy)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
