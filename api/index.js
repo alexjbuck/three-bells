@@ -37,7 +37,7 @@ app.use((req, res, next) => {
   // Basic CSP - allow same-origin and Google OAuth
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-ancestors 'none';",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://accounts.google.com; frame-ancestors 'none';",
   );
   // Control referrer information
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -621,6 +621,7 @@ app.get("/api", async (req, res) => {
             <link rel="manifest" href="/manifest.json">
             <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
             <link rel="apple-touch-icon" href="/icons/icon-192.png">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
             <title>Three Bells - Dashboard</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1176,7 +1177,67 @@ app.get("/api", async (req, res) => {
                     display: flex;
                     align-items: center;
                 }
+                .help-btn {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    border: 2px solid #ddd;
+                    background: white;
+                    color: #002447;
+                    font-weight: bold;
+                    cursor: pointer;
+                    margin-right: 12px;
+                    transition: all 0.2s;
+                    font-size: 14px;
+                }
+                .help-btn:hover {
+                    background: #002447;
+                    color: white;
+                    border-color: #002447;
+                }
+                .driver-popover {
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    max-width: 320px;
+                }
+                .driver-popover-title {
+                    font-size: 1.1em;
+                    color: #002447;
+                    font-weight: 700;
+                }
+                .driver-popover-description {
+                    color: #555;
+                    font-size: 0.95em;
+                    line-height: 1.5;
+                }
+                .driver-popover-progress-text {
+                    color: #999;
+                    font-size: 0.8em;
+                }
+                .driver-popover-prev-btn,
+                .driver-popover-next-btn {
+                    background: #002447;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .driver-popover-prev-btn:hover,
+                .driver-popover-next-btn:hover {
+                    background: #003d6b;
+                }
+                .driver-popover-close-btn {
+                    color: #999;
+                }
+                .driver-overlay {
+                    background: rgba(0, 36, 71, 0.75);
+                }
             </style>
+            <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
         </head>
         <body>
             <div id="loader" class="loading-overlay">
@@ -1198,6 +1259,7 @@ app.get("/api", async (req, res) => {
                         <button id="installBtn" class="install-btn">
                             📲 Install
                         </button>
+                        <button id="helpBtn" class="help-btn" title="Start tutorial">?</button>
                         <div class="profile-container">
                             <button id="profileBtn" class="profile-btn">
                                 ${
@@ -1211,13 +1273,14 @@ app.get("/api", async (req, res) => {
                                     <div class="profile-name">${userDisplayName}</div>
                                     <div class="profile-email">${userEmail}</div>
                                 </div>
+                                <a href="#" id="showTutorialLink" class="profile-logout">Show Tutorial</a>
                                 <a href="/api/logout" class="profile-logout">Logout</a>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="summary-card">
+                <div id="summaryCard" class="summary-card">
                     <div class="summary-grid">
                         <div class="summary-item">
                             <div class="summary-label">Unbundled Balance</div>
@@ -1239,7 +1302,7 @@ app.get("/api", async (req, res) => {
                 ${
                   availableRMPs > 0 && !editLog
                     ? `
-                    <div class="card highlight">
+                    <div id="bundleCard" class="card highlight">
                         <h3>Ready to File RMP</h3>
                         <form action="/api/submit-unit" method="POST">
                             <input type="hidden" name="_csrf" value="${csrfToken}">
@@ -1254,7 +1317,7 @@ app.get("/api", async (req, res) => {
                     : ""
                 }
 
-                <div class="card ${editLog ? "edit-mode" : ""}">
+                <div id="logHoursCard" class="card ${editLog ? "edit-mode" : ""}">
                     <div class="card-header-with-timer">
                         <h3>${editLog ? "Edit Entry" : "Log Hours"}</h3>
                         ${
@@ -1300,7 +1363,7 @@ app.get("/api", async (req, res) => {
                     </form>
                 </div>
 
-                <h2 class="section-title">Submitted RMPs</h2>
+                <h2 id="rmpsSection" class="section-title">Submitted RMPs</h2>
                 ${
                   rmps.length > 0
                     ? rmps
@@ -1334,7 +1397,7 @@ app.get("/api", async (req, res) => {
                     : '<p style="color:#999; text-align:center; padding:20px;">No submitted RMPs yet</p>'
                 }
 
-                <h2 class="section-title">History</h2>
+                <h2 id="historySection" class="section-title">History</h2>
                 <table class="history-table">
                     ${
                       logs.length > 0
@@ -1620,6 +1683,132 @@ app.get("/api", async (req, res) => {
                         installBtn.classList.remove('show');
                     }
                 });
+
+                // Tutorial functionality
+                function createTutorial() {
+                    const driver = window.driver.js.driver;
+
+                    const steps = [
+                        {
+                            popover: {
+                                title: 'Welcome to Three Bells!',
+                                description: 'Let\\'s get you started tracking your RMP hours. This will be quick!',
+                            }
+                        },
+                        {
+                            element: '#summaryCard',
+                            popover: {
+                                title: 'Your Dashboard',
+                                description: 'Here\\'s your snapshot: unbundled hours, pending RMPs, and paid RMPs all in one place.',
+                                side: 'bottom',
+                                align: 'center'
+                            }
+                        },
+                        {
+                            element: '.timer-inline',
+                            popover: {
+                                title: 'Track Time Live',
+                                description: 'Hit play when you start training. The timer keeps running even if you close the app!',
+                                side: 'bottom',
+                                align: 'center'
+                            }
+                        },
+                        {
+                            element: '#logHoursCard',
+                            popover: {
+                                title: 'Log Your Hours',
+                                description: 'Enter a time range or type hours manually. Add a note if you like!',
+                                side: 'top',
+                                align: 'center'
+                            }
+                        },
+                        {
+                            element: '#rmpsSection',
+                            popover: {
+                                title: 'Track Your RMPs',
+                                description: 'See all your submitted RMPs here. Mark them paid once the money hits!',
+                                side: 'top',
+                                align: 'center'
+                            }
+                        },
+                        {
+                            element: '#historySection',
+                            popover: {
+                                title: 'Your Log History',
+                                description: 'Every entry you\\'ve logged. Edit or delete unbundled entries anytime.',
+                                side: 'top',
+                                align: 'center'
+                            }
+                        },
+                        {
+                            element: '#helpBtn',
+                            popover: {
+                                title: 'Need Help?',
+                                description: 'Click here anytime to run this tour again. Happy tracking!',
+                                side: 'bottom',
+                                align: 'end'
+                            }
+                        }
+                    ];
+
+                    // Add bundle card step if visible
+                    const bundleCard = document.getElementById('bundleCard');
+                    if (bundleCard) {
+                        steps.splice(4, 0, {
+                            element: '#bundleCard',
+                            popover: {
+                                title: 'Ready to Bundle!',
+                                description: 'You\\'ve got 3+ hours! Bundle them into an RMP and submit.',
+                                side: 'bottom',
+                                align: 'center'
+                            }
+                        });
+                    }
+
+                    const driverObj = driver({
+                        showProgress: true,
+                        showButtons: ['next', 'previous', 'close'],
+                        nextBtnText: 'Next',
+                        prevBtnText: 'Back',
+                        doneBtnText: 'Done',
+                        steps: steps,
+                        onDestroyStarted: () => {
+                            localStorage.setItem('threeBells_tutorial_v1', 'complete');
+                            driverObj.destroy();
+                        }
+                    });
+
+                    return driverObj;
+                }
+
+                // Auto-start tutorial for new users
+                const tutorialComplete = localStorage.getItem('threeBells_tutorial_v1');
+                if (!tutorialComplete) {
+                    setTimeout(() => {
+                        const tour = createTutorial();
+                        tour.drive();
+                    }, 500);
+                }
+
+                // Help button click handler
+                const helpBtn = document.getElementById('helpBtn');
+                if (helpBtn) {
+                    helpBtn.addEventListener('click', () => {
+                        const tour = createTutorial();
+                        tour.drive();
+                    });
+                }
+
+                // Show Tutorial link in profile dropdown
+                const showTutorialLink = document.getElementById('showTutorialLink');
+                if (showTutorialLink) {
+                    showTutorialLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        profileDropdown.classList.remove('show');
+                        const tour = createTutorial();
+                        tour.drive();
+                    });
+                }
             </script>
         </body>
         </html>
