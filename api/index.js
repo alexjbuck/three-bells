@@ -1708,7 +1708,7 @@ app.get("/api", async (req, res) => {
                             element: '.timer-inline',
                             popover: {
                                 title: 'Track Time Live',
-                                description: 'Hit play when you start training. The timer keeps running even if you close the app!',
+                                description: 'Hit play when you start working. The timer keeps running even if you close the app!',
                                 side: 'bottom',
                                 align: 'center'
                             }
@@ -1717,7 +1717,7 @@ app.get("/api", async (req, res) => {
                             element: '#logHoursCard',
                             popover: {
                                 title: 'Log Your Hours',
-                                description: 'Enter a time range or type hours manually. Add a note if you like!',
+                                description: 'Enter a time range, type hours manually, or hit stop on the timer to fill it in. Add a note if you like!',
                                 side: 'top',
                                 align: 'center'
                             }
