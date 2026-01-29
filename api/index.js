@@ -1234,7 +1234,10 @@ app.get("/api", async (req, res) => {
                     color: #999;
                 }
                 .driver-overlay {
-                    background: rgba(0, 36, 71, 0.75);
+                    background: rgba(0, 0, 0, 0.4) !important;
+                }
+                .driver-active-element {
+                    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.8) !important;
                 }
             </style>
             <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
