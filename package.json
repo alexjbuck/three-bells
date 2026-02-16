@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
     "husky": "^9.1.7",
     "oxc": "^1.0.1",
     "oxfmt": "^0.27.0",
