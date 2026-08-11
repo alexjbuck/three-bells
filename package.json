@@ -31,7 +31,7 @@
     "prisma": "^6.19.2"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
+    "@changesets/cli": "^2.30.0",
     "dotenv": "^17.2.3",
     "husky": "^9.1.7",
     "oxc": "^1.0.1",
