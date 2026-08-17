@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
-    "@quixo3/prisma-session-store": "^3.1.19",
+    "@quixo3/prisma-session-store": "^3.1.21",
     "compression": "^1.8.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
