@@ -31,7 +31,7 @@ const todayUtc = () => toDateInput(new Date());
 
 /** Respond to a successful mutation. */
 async function respond(req, res, { toast, toastOpts, trigger } = {}) {
-  if (!isHtmx(req)) return res.redirect("/api");
+  if (!isHtmx(req)) return res.redirect("/");
   const data = await getDashboardData(req.user.id);
   const html =
     views.renderRegions(data, { csrfToken: getCSRFToken(req), todayStr: todayUtc() }) +
@@ -61,12 +61,14 @@ const findOpenLog = (req) =>
 
 // ---- Pages ----
 
-router.get("/", (req, res) => {
+// Old page URLs, kept so bookmarks and installed apps still work.
+router.get("/api", (req, res) => {
   setNoCache(res);
-  res.redirect("/api");
+  res.redirect("/");
 });
+router.get("/api/changelog", (req, res) => res.redirect("/changelog"));
 
-router.get("/api", async (req, res) => {
+router.get("/", async (req, res) => {
   setNoCache(res);
   try {
     if (!req.isAuthenticated?.()) return res.send(renderLanding());
@@ -86,7 +88,7 @@ router.get("/api", async (req, res) => {
   }
 });
 
-router.get("/api/changelog", (req, res) => {
+router.get("/changelog", (req, res) => {
   try {
     const markdown = fs.readFileSync(path.join(__dirname, "..", "CHANGELOG.md"), "utf-8");
     res.set({ "Cache-Control": "public, max-age=3600" });

@@ -16,3 +16,4 @@ Redesign the dashboard and stop full-page reloads
 - Fix entry times shifting when the server isn't running in UTC; "today" now uses your local date
 - Split the single 2,400-line server file into routes, views and lib modules; add unit tests
 - Tighter Content Security Policy (no inline scripts)
+- The app now lives at `/` (and the changelog at `/changelog`); old `/api` links redirect

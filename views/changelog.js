@@ -50,7 +50,7 @@ function renderChangelog(markdown) {
     bodyClass: "doc",
     body: `
 <main class="doc-page">
-  <a href="/api" class="back-link">${icon("arrowLeft", { size: 16 })} Back to dashboard</a>
+  <a href="/" class="back-link">${icon("arrowLeft", { size: 16 })} Back to dashboard</a>
   <h1>What's new</h1>
   <div class="prose">${markdownToHtml(markdown)}</div>
 </main>`,

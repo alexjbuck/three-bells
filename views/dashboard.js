@@ -367,7 +367,7 @@ function renderDashboard({ data, user, csrfToken, todayStr, version }) {
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="/api" aria-label="Three Bells home">
+    <a class="brand" href="/" aria-label="Three Bells home">
       <span class="brand-mark">${icon("bell", { size: 18 })}</span>
       <span class="brand-name">Three Bells</span>
     </a>
@@ -390,7 +390,7 @@ function renderDashboard({ data, user, csrfToken, todayStr, version }) {
             <div class="menu-email">${h(email)}</div>
           </div>
           <button type="button" class="menu-item" id="showTutorialLink">${icon("compass", { size: 16 })} Show tutorial</button>
-          <a class="menu-item" href="/api/changelog">${icon("fileText", { size: 16 })} What's new <span class="menu-meta">v${h(version)}</span></a>
+          <a class="menu-item" href="/changelog">${icon("fileText", { size: 16 })} What's new <span class="menu-meta">v${h(version)}</span></a>
           <a class="menu-item" href="/api/logout">${icon("logout", { size: 16 })} Sign out</a>
         </div>
       </div>
@@ -402,7 +402,7 @@ function renderDashboard({ data, user, csrfToken, todayStr, version }) {
   ${renderSummary(data, { csrfToken, todayStr })}
   ${renderRmps(data)}
   ${renderHistory(data)}
-  <footer class="page-foot">Three Bells v${h(version)} · <a href="/api/changelog">Changelog</a></footer>
+  <footer class="page-foot">Three Bells v${h(version)} · <a href="/changelog">Changelog</a></footer>
 </main>
 
 <button type="button" id="fab" class="fab" data-open-entry aria-label="Add entry">${icon("plus", { size: 26 })}</button>
