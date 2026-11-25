@@ -290,13 +290,10 @@ button {
   letter-spacing: -0.01em;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
-  color: var(--accent);
+  border-radius: 7px;
 }
 .brand-name {
   font-size: 1.05rem;
@@ -1460,14 +1457,11 @@ body.landing {
   animation: pop 0.3s ease-out;
 }
 .landing-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 72px;
   height: 72px;
   margin: 0 auto 18px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #0b2a4a, #164b80);
-  color: var(--accent);
+  border-radius: 16px;
   box-shadow: 0 10px 24px rgba(11, 42, 74, 0.35);
 }
 .landing-card h1 {

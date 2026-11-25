@@ -368,7 +368,7 @@ function renderDashboard({ data, user, csrfToken, todayStr, version }) {
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/" aria-label="Three Bells home">
-      <span class="brand-mark">${icon("bell", { size: 18 })}</span>
+      <img class="brand-mark" src="${assetUrl("icons/three-bells.svg")}" alt="" width="32" height="32">
       <span class="brand-name">Three Bells</span>
     </a>
     <div class="topbar-actions">

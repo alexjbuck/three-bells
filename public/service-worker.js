@@ -1,12 +1,12 @@
-const CACHE_NAME = "three-bells-v2";
+const CACHE_NAME = "three-bells-v3";
 const OFFLINE_URL = "/offline.html";
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/icons/three-bells-192.png",
+  "/icons/three-bells-512.png",
 ];
 
 // Install event - cache essential assets

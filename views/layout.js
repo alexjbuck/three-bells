@@ -16,8 +16,9 @@ function layout({ title, description, body, head = "", bodyAttrs = "", bodyClass
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Three Bells">
   <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="${assetUrl("icons/three-bells.svg")}">
+  <link rel="icon" type="image/png" sizes="32x32" href="${assetUrl("icons/favicon-32.png")}">
+  <link rel="apple-touch-icon" sizes="180x180" href="${assetUrl("icons/apple-touch-icon.png")}">
   <link rel="stylesheet" href="${assetUrl("app.css")}">
   <title>${h(title)}</title>
   ${head}
