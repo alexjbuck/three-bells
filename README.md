@@ -16,13 +16,16 @@ Three Bells helps Navy Reserve personnel track training hours, bundle them into 
   - Ready-to-file RMPs
   - Pending RMPs (last 30 days)
   - Total paid RMPs
-- **History Management**: View and edit all training log entries
+- **History Management**: Entries grouped by month, edited inline right in the list
+- **No page reloads**: Every action updates only what changed and keeps your scroll position, with undo for deletes and payment changes
+- **Mobile first, dark mode**: Designed for the installed PWA on a phone, with a bottom-sheet entry form and a floating add button
 - **Google OAuth Authentication**: Secure login with Google accounts
 - **Changelog Viewer**: Track application updates and improvements
 
 ## Tech Stack
 
-- **Backend**: Node.js with Express 5
+- **Backend**: Node.js with Express 5, server-rendered HTML
+- **Frontend**: [htmx](https://htmx.org) (vendored in `public/vendor/`) for partial updates, plain CSS and JS, no build step
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: Passport.js with Google OAuth 2.0
 - **Session Management**: Express Session with Prisma session store
@@ -154,6 +157,31 @@ The `vercel.json` configuration handles routing and caching headers.
 - **Error Handling**: Sanitized error messages in production
 - **Audit Logging**: Security event logging for authentication
 
+## Project Structure
+
+```
+api/index.js        Express app setup (Vercel serverless entry point)
+routes/auth.js      Google OAuth + preview-deployment token hand-off
+routes/app.js       Dashboard page and all actions (htmx fragments or redirects)
+lib/                Data access (rmp.js), time handling (time.js), validation, security
+views/              HTML render functions; each dashboard region renders on its own
+public/             app.css, app.js, service worker, PWA assets, vendored htmx
+test/               Unit tests (node:test)
+```
+
+### How updates work
+
+Actions are regular HTML forms and buttons enhanced with htmx. For an htmx request the
+server responds with only the regions that changed (summary, RMPs, history) as
+[out-of-band swaps](https://htmx.org/attributes/hx-swap-oob/) plus a toast, so nothing
+reloads. Without JavaScript the same endpoints redirect back to the dashboard.
+
+### Times
+
+Log times are wall-clock times (what the user typed) stored as UTC and always parsed and
+formatted in UTC, so results never depend on the server's timezone. The browser supplies
+anything that needs the user's local time, like today's date and the timer.
+
 ## Database Schema
 
 - **Rmp**: Stores submitted RMP records with status tracking
@@ -165,7 +193,8 @@ See `prisma/schema.prisma` for full schema details.
 ## Scripts
 
 - `npm run changeset` - Create a new changeset for version management
-- `npm run checks` - Run all quality checks (lint + format check)
+- `npm run checks` - Run all quality checks (lint + format check + tests)
+- `npm test` - Run unit tests (`node --test`)
 - `npm run fix` - Auto-fix linting and formatting issues
 - `npm run format` - Format code with oxfmt
 - `npm run format:check` - Check code formatting
