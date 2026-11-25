@@ -1,0 +1,50 @@
+name: Release
+
+# Post-merge releases. PRs carry only their own commits plus changeset files. After every
+# push to main, scripts/release.sh turns pending changesets into a "chore: release vX.Y.Z"
+# commit on main, tags it, fast-forwards the `production` branch to it (Vercel deploys
+# production from that branch; main only gets previews) and creates a GitHub Release.
+#
+# Pushes made with GITHUB_TOKEN don't trigger workflows, so the release commit doesn't
+# re-run this workflow. Vercel still sees them through its Git integration.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HUSKY: "0" # checks already ran on the PR; skip the pre-commit hook for the bot commit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Release pending changesets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The script resets to the latest main; run a copy so it can't change underneath itself.
+          cp scripts/release.sh "$RUNNER_TEMP/release.sh"
+          "$RUNNER_TEMP/release.sh"
