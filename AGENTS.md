@@ -1,7 +1,11 @@
 # Three Bells: agent guide
 
-Navy Reserve RMP hour tracker. Express 5 + Prisma 6 (PostgreSQL), server-rendered HTML
-enhanced with htmx, deployed as one Vercel serverless function. CommonJS, no build step.
+Navy Reserve RMP hour tracker. Express 5 + Prisma 7 (PostgreSQL), server-rendered HTML
+enhanced with htmx, deployed as one Vercel serverless function. CommonJS.
+
+There is no build step today; the code runs straight from source. That's a description,
+not a rule: if one becomes necessary, add a `build` script to `package.json` (Vercel runs
+it on every deploy) and make sure local dev and `npm test` still work.
 
 ## Commands
 
@@ -12,7 +16,6 @@ enhanced with htmx, deployed as one Vercel serverless function. CommonJS, no bui
 ## Conventions that aren't obvious from the code
 
 - **Vendored files:** never edit anything in `public/vendor/` (pinned third-party builds).
-
 - **URLs:** pages live at `/` and `/changelog`. Actions and auth live under `/api/...`.
   `/api` and `/api/changelog` only redirect for old bookmarks. Keep the OAuth callback at
   `/api/auth/callback`, since it is registered in Google Cloud Console. Keep the manifest
@@ -38,19 +41,18 @@ enhanced with htmx, deployed as one Vercel serverless function. CommonJS, no bui
 - **Elements that persist across swaps** need stable ids. Log rows and RMP cards also need a
   unique `view-transition-name`. `app.js` keeps the scroll position anchored to elements by id.
 
-## Prisma version
+## Prisma
 
-**Stay on Prisma 6 for now.** Do not upgrade to Prisma 7 or later (8 is in release
-candidates). Patch and minor updates within 6.x are fine.
+On Prisma 7 with the classic `prisma-client-js` generator, which keeps plain
+`require("@prisma/client")` working in this CommonJS, no-build project.
 
-Prisma 7 introduced breaking changes that require significant refactoring:
-
-- New `prisma.config.ts` configuration file required
-- Driver adapter pattern changes PrismaClient instantiation
-- ESM-only module format (project currently uses CommonJS)
-- New generator provider and required output path in schema
-- Import paths change from `@prisma/client` to local generated path
-- Uncertain compatibility with `@quixo3/prisma-session-store`
-
-When dependabot PRs appear for Prisma 7 or 8, close them or leave them until the project is ready
-for the migration.
+- `prisma.config.ts` holds the CLI's database URL. It reads `DATABASE_URL` optionally on
+  purpose: `prisma generate` runs on every `npm install` (postinstall), including CI jobs
+  with no database. Don't switch it to Prisma's `env()` helper, which throws when the
+  variable is unset and would break those installs.
+- The app connects through the `@prisma/adapter-pg` driver adapter (`lib/db.js`), not a
+  schema `url`.
+- **Don't upgrade to Prisma 8 yet**, and pin exact versions when upgrading: npm's `latest`
+  tag has pointed at 8.x release candidates. Moving to 8 will likely mean switching to the
+  newer `prisma-client` generator, which outputs TypeScript and so needs a build step or
+  TypeScript support. Close Dependabot PRs for 8 until that's planned.
