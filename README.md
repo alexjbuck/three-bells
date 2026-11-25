@@ -138,19 +138,21 @@ npx prisma studio
 
 ## Deployment
 
-Vercel's Git integration deploys the app: every pull request gets a preview, and every
-push to `main` deploys production. There is no deploy step in GitHub Actions.
+Vercel's Git integration deploys the app: every pull request and every push to `main` gets
+a preview, and the `production` branch deploys production. There is no deploy step in
+GitHub Actions.
 
 - **Migrations:** production builds run `prisma migrate deploy` before going live
   (`scripts/vercel-build.js`, set as `buildCommand` in `vercel.json`). If migrations fail,
   the build fails and the previous deployment keeps serving. Preview databases (Neon
   branches) are migrated by the PR Checks workflow.
-- **Versioning:** each pull request carries its own version bump. When a PR has
-  changesets, the Version workflow adds a `chore: version packages [bot]` commit to it
-  (bumped `package.json`, updated `CHANGELOG.md`), and refreshes that commit on every
-  other open PR whenever something merges to `main`. Merging a PR therefore deploys the
-  code, version and changelog together. After the bot commits, pull before pushing more
-  commits to that branch.
+- **Production deploys tagged releases only.** Vercel's Production Branch is
+  `production`; pushes to `main` get preview deployments. After each push to `main`, the
+  Release workflow (`scripts/release.sh`) turns any pending changesets into a
+  `chore: release vX.Y.Z` commit on `main`, tags it `vX.Y.Z`, fast-forwards `production`
+  to it (which deploys) and creates a GitHub Release with that version's changelog.
+  PRs carry only their own commits plus changeset files. Merges without changesets ship
+  with the next release.
 - **Environment:** set `DATABASE_URL`, `SESSION_SECRET` and the Google OAuth variables in
   the Vercel dashboard. `DATABASE_URL` must be available at build time for production.
 
