@@ -138,13 +138,19 @@ npx prisma studio
 
 ## Deployment
 
-This application is configured for deployment on Vercel:
+Vercel's Git integration deploys the app: every pull request gets a preview, and every
+push to `main` deploys production. There is no deploy step in GitHub Actions.
 
-1. Connect your GitHub repository to Vercel
-2. Configure environment variables in Vercel dashboard
-3. Deploy automatically on push to main branch
+- **Migrations:** production builds run `prisma migrate deploy` before going live
+  (`scripts/vercel-build.js`, set as `buildCommand` in `vercel.json`). If migrations fail,
+  the build fails and the previous deployment keeps serving. Preview databases (Neon
+  branches) are migrated by the PR Checks workflow.
+- **Versioning:** when changesets land on `main`, the Release workflow opens or updates a
+  "Version Packages" pull request. Merge it to bump the version and update `CHANGELOG.md`.
+- **Environment:** set `DATABASE_URL`, `SESSION_SECRET` and the Google OAuth variables in
+  the Vercel dashboard. `DATABASE_URL` must be available at build time for production.
 
-The `vercel.json` configuration handles routing and caching headers.
+The `vercel.json` configuration handles routing, caching headers and the build command.
 
 ## Security Features
 
