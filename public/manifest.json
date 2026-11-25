@@ -3,7 +3,7 @@
   "name": "Three Bells - Navy Reserve RMP Tracker",
   "short_name": "Three Bells",
   "description": "Track and manage your Navy Reserve RMP training hours. Log hours, bundle into RMPs, and track payment status.",
-  "start_url": "/api",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#002447",

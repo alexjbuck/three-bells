@@ -2,6 +2,11 @@
   "version": 2,
   "outputDirectory": ".",
   "buildCommand": "node scripts/vercel-build.js",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{public/**,CHANGELOG.md}"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
