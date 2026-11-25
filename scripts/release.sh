@@ -3,7 +3,8 @@
 #
 # PRs carry only their own commits plus changeset files. After a merge, if main has
 # pending changesets, this:
-#   1. runs `changeset version` (bumps package.json, writes CHANGELOG.md),
+#   1. runs `changeset version` (bumps package.json, writes CHANGELOG.md) and syncs the
+#      lockfile's version,
 #   2. commits "chore: release vX.Y.Z" to main and tags it vX.Y.Z (one atomic push),
 #   3. fast-forwards the `production` branch to that commit. Vercel's production branch
 #      is `production`, so this is what deploys (main only gets previews),
@@ -28,6 +29,8 @@ for attempt in 1 2 3; do
   fi
 
   npx --no-install changeset version
+  # changeset bumps package.json only; keep package-lock.json's version in step.
+  npm install --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null
   version=$(node -p "require('./package.json').version")
   tag="v$version"
   if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
