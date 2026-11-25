@@ -1,7 +1,18 @@
 {
   "version": 2,
   "outputDirectory": ".",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "buildCommand": "node scripts/vercel-build.js",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{public/**,CHANGELOG.md}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
   "headers": [
     {
       "source": "/",

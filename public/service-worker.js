@@ -1,12 +1,12 @@
-const CACHE_NAME = "three-bells-v1";
+const CACHE_NAME = "three-bells-v3";
 const OFFLINE_URL = "/offline.html";
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
   "/offline.html",
   "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/icons/three-bells-192.png",
+  "/icons/three-bells-512.png",
 ];
 
 // Install event - cache essential assets
@@ -66,6 +66,33 @@ self.addEventListener("fetch", (event) => {
           // If offline, try cache first, then fallback to offline page
           return caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL));
         }),
+    );
+    return;
+  }
+
+  // Content-hashed assets (?v=...) never change, so serve them cache-first.
+  if (url.searchParams.has("v")) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const responseClone = response.clone();
+              caches.open(CACHE_NAME).then(async (cache) => {
+                // Drop older versions of the same file.
+                for (const key of await cache.keys()) {
+                  const keyUrl = new URL(key.url);
+                  if (keyUrl.pathname === url.pathname && keyUrl.search !== url.search) {
+                    cache.delete(key);
+                  }
+                }
+                cache.put(request, responseClone);
+              });
+            }
+            return response;
+          }),
+      ),
     );
     return;
   }
