@@ -1,13 +1,13 @@
 // Google OAuth, including the cross-origin token hand-off for preview deployments.
 const express = require("express");
 const passport = require("passport");
+const { setNoCache, authRateLimiter } = require("../lib/security");
 const {
-  setNoCache,
-  isValidRedirectUrl,
+  createOAuthState,
+  readOAuthState,
   createAuthToken,
   verifyAuthToken,
-  authRateLimiter,
-} = require("../lib/security");
+} = require("../lib/auth-tokens");
 
 const router = express.Router();
 
@@ -23,25 +23,23 @@ router.get("/api/auth/google", authRateLimiter, (req, res, next) => {
 
   // Remember where to return after OAuth so preview deployments work.
   const returnUrl = `${req.protocol}://${req.get("host")}/`;
-  const state = Buffer.from(JSON.stringify({ returnUrl })).toString("base64url");
+  // Signed so production only ever redirects to a return URL one of our deployments chose.
+  const state = createOAuthState(returnUrl);
   passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
 });
 
 router.get("/api/auth/callback", authRateLimiter, (req, res, next) => {
   setNoCache(res);
 
+  // Only trust a return URL from a state we signed; anything else stays on this deployment.
   let returnUrl = "/";
   if (req.query.state) {
-    try {
-      const state = JSON.parse(Buffer.from(req.query.state, "base64url").toString());
-      if (state.returnUrl && isValidRedirectUrl(state.returnUrl)) {
-        returnUrl = state.returnUrl;
-        console.log(`[SECURITY] OAuth callback will redirect to: ${returnUrl}`);
-      } else if (state.returnUrl) {
-        console.warn(`[SECURITY] Rejected invalid redirect URL: ${state.returnUrl}`);
-      }
-    } catch (e) {
-      console.warn("[SECURITY] Failed to decode OAuth state:", e.message);
+    const signedReturnUrl = readOAuthState(req.query.state);
+    if (signedReturnUrl) {
+      returnUrl = signedReturnUrl;
+      console.log(`[SECURITY] OAuth callback will redirect to: ${returnUrl}`);
+    } else {
+      console.warn("[SECURITY] Ignoring OAuth state that is unsigned, expired or not allowed");
     }
   }
 
@@ -78,9 +76,10 @@ router.get("/api/auth/callback", authRateLimiter, (req, res, next) => {
           if (returnUrl !== "/") {
             try {
               const targetUrl = new URL(returnUrl);
-              if (targetUrl.hostname !== req.get("host")) {
+              if (targetUrl.host !== req.get("host")) {
+                // The token is only valid on the host it's issued for.
                 targetUrl.pathname = "/api/auth/token";
-                targetUrl.searchParams.set("token", createAuthToken(user));
+                targetUrl.searchParams.set("token", createAuthToken(user, targetUrl.host));
                 finalUrl = targetUrl.toString();
                 console.log(
                   `[SECURITY] Cross-origin redirect with auth token to: ${targetUrl.hostname}`,
@@ -100,7 +99,9 @@ router.get("/api/auth/callback", authRateLimiter, (req, res, next) => {
 // Receives a signed token from production after OAuth and creates a local session.
 router.get("/api/auth/token", authRateLimiter, (req, res) => {
   setNoCache(res);
-  const user = req.query.token ? verifyAuthToken(req.query.token) : null;
+  // Host header, not X-Forwarded-Host: Vercel routes by Host, so a request carrying this
+  // deployment's host really reached this deployment.
+  const user = req.query.token ? verifyAuthToken(req.query.token, req.get("host")) : null;
   if (!user) {
     console.warn("[SECURITY] /api/auth/token received a missing or invalid token");
     return res.redirect("/");
