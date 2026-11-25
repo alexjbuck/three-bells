@@ -8,6 +8,12 @@ const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
 const compression = require("compression");
 const crypto = require("node:crypto");
 const rateLimit = require("express-rate-limit");
+const {
+  createOAuthState,
+  readOAuthState,
+  createAuthToken,
+  verifyAuthToken,
+} = require("../lib/auth-tokens");
 
 const prisma = new PrismaClient();
 const app = express();
@@ -93,97 +99,6 @@ passport.use(
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
-
-// Validate redirect URLs to prevent open redirect attacks
-// Allows: localhost (dev), production URL, and Vercel preview deployments
-function isValidRedirectUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname;
-
-    // Allow localhost for development
-    if (hostname === "localhost") {
-      return true;
-    }
-
-    // Allow production URL
-    const prodUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    if (prodUrl && hostname === prodUrl) {
-      return true;
-    }
-
-    // Allow Vercel preview deployments for this project only
-    // Patterns:
-    //   three-bells-git-{branch}-alexjbucks-projects.vercel.app (branch deploys)
-    //   three-bells-{hash}-alexjbucks-projects.vercel.app (PR/commit deploys)
-    if (hostname.endsWith(".vercel.app")) {
-      if (
-        hostname === "three-bells.vercel.app" ||
-        (hostname.startsWith("three-bells-") && hostname.includes("-alexjbucks-projects"))
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-// Create a signed token for cross-origin auth (preview branch redirects)
-// Token format: base64url(payload).base64url(signature)
-// Expires after 60 seconds to prevent replay attacks
-function createAuthToken(user) {
-  const payload = {
-    id: user.id,
-    displayName: user.displayName,
-    emails: user.emails,
-    exp: Date.now() + 60 * 1000, // 60 second expiry
-  };
-  const payloadStr = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payloadStr)
-    .digest("base64url");
-  return `${payloadStr}.${signature}`;
-}
-
-// Verify and decode an auth token
-// Returns user object if valid, null if invalid/expired
-function verifyAuthToken(token) {
-  try {
-    const [payloadStr, signature] = token.split(".");
-    if (!payloadStr || !signature) return null;
-
-    const expectedSig = crypto
-      .createHmac("sha256", process.env.SESSION_SECRET)
-      .update(payloadStr)
-      .digest("base64url");
-
-    // Timing-safe comparison to prevent timing attacks
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
-      return null;
-    }
-
-    const payload = JSON.parse(Buffer.from(payloadStr, "base64url").toString());
-
-    // Check expiry
-    if (payload.exp < Date.now()) {
-      console.warn("[SECURITY] Auth token expired");
-      return null;
-    }
-
-    return {
-      id: payload.id,
-      displayName: payload.displayName,
-      emails: payload.emails,
-    };
-  } catch (e) {
-    console.warn("[SECURITY] Auth token verification failed:", e.message);
-    return null;
-  }
-}
 
 // Rate limiter for auth endpoints to prevent brute-force attempts
 const authRateLimiter = rateLimit({
@@ -2128,7 +2043,8 @@ app.get("/api/auth/google", authRateLimiter, (req, res, next) => {
   const protocol = req.protocol;
   const host = req.get("host");
   const returnUrl = `${protocol}://${host}/api`;
-  const state = Buffer.from(JSON.stringify({ returnUrl })).toString("base64url");
+  // Signed so production only ever redirects to a return URL one of our deployments chose.
+  const state = createOAuthState(returnUrl);
 
   passport.authenticate("google", {
     scope: ["profile", "email"],
@@ -2145,19 +2061,15 @@ app.get("/api/auth/callback", (req, res, next) => {
     Expires: "0",
   });
 
-  // Decode the state parameter to get the return URL
+  // Only trust a return URL from a state we signed; anything else stays on this deployment.
   let returnUrl = "/api";
   if (req.query.state) {
-    try {
-      const state = JSON.parse(Buffer.from(req.query.state, "base64url").toString());
-      if (state.returnUrl && isValidRedirectUrl(state.returnUrl)) {
-        returnUrl = state.returnUrl;
-        console.log(`[SECURITY] OAuth callback will redirect to: ${returnUrl}`);
-      } else if (state.returnUrl) {
-        console.warn(`[SECURITY] Rejected invalid redirect URL: ${state.returnUrl}`);
-      }
-    } catch (e) {
-      console.warn("[SECURITY] Failed to decode OAuth state:", e.message);
+    const signedReturnUrl = readOAuthState(req.query.state);
+    if (signedReturnUrl) {
+      returnUrl = signedReturnUrl;
+      console.log(`[SECURITY] OAuth callback will redirect to: ${returnUrl}`);
+    } else {
+      console.warn("[SECURITY] Ignoring OAuth state that is unsigned, expired or not allowed");
     }
   }
 
@@ -2211,10 +2123,10 @@ app.get("/api/auth/callback", (req, res, next) => {
           let finalUrl = returnUrl;
           if (returnUrl !== "/api") {
             try {
-              const currentHost = req.get("host");
               const targetUrl = new URL(returnUrl);
-              if (targetUrl.hostname !== currentHost) {
-                const token = createAuthToken(user);
+              if (targetUrl.host !== req.get("host")) {
+                // The token is only valid on the host it's issued for.
+                const token = createAuthToken(user, targetUrl.host);
                 // Redirect to /api/auth/token on the target with the token
                 targetUrl.pathname = "/api/auth/token";
                 targetUrl.searchParams.set("token", token);
@@ -2252,7 +2164,9 @@ app.get("/api/auth/token", authRateLimiter, (req, res) => {
     return res.redirect("/api");
   }
 
-  const user = verifyAuthToken(token);
+  // Host header, not X-Forwarded-Host: Vercel routes by Host, so a request carrying this
+  // deployment's host really reached this deployment.
+  const user = verifyAuthToken(token, req.get("host"));
   if (!user) {
     console.warn("[SECURITY] /api/auth/token received invalid token");
     return res.redirect("/api");
