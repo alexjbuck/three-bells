@@ -24,7 +24,7 @@ function renderLanding() {
     head: `<script src="${assetUrl("sw-register.js")}" defer></script>`,
     body: `
 <main class="landing-card">
-  <div class="landing-mark">${icon("bell", { size: 36 })}</div>
+  <img class="landing-mark" src="${assetUrl("icons/three-bells.svg")}" alt="" width="72" height="72">
   <h1>Three Bells</h1>
   <p class="landing-sub">Track Navy Reserve RMP hours, from the first minute to the paid check.</p>
   <a href="/api/auth/google" class="btn btn-google">${GOOGLE_LOGO}<span>Sign in with Google</span></a>
