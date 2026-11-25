@@ -1,5 +1,55 @@
 # three-bells
 
+## 1.8.0
+
+### Minor Changes
+
+- 72a6b8d: Redesign the dashboard and stop full-page reloads
+
+  - Every action (log, edit, delete, bundle, mark paid, unsubmit) now updates in place with htmx and keeps your scroll position
+  - Edit entries inline in the history list; Escape cancels
+  - Undo for deleted entries and payment status changes; a styled confirm replaces browser dialogs
+  - New phone-first layout: sticky top bar with the timer, bottom-sheet entry form, floating add button, no more cramped RMP cards
+  - History grouped by month with totals; bundled entries link to their RMP
+  - RMP cards expand to show their entries and can copy their notes
+  - "Bundle all" when more than one RMP is ready
+  - Clear "Time range / Manual hours" toggle with a live hours preview and inline validation messages
+  - Dark mode, refreshed visual design and icons
+  - Fix entry times shifting when the server isn't running in UTC; "today" now uses your local date
+  - Split the single 2,400-line server file into routes, views and lib modules; add unit tests
+  - Tighter Content Security Policy (no inline scripts)
+  - The app now lives at `/` (and the changelog at `/changelog`); old `/api` links redirect
+
+- 50ba7f9: Add interactive walkthrough tutorial for new users
+
+  - Auto-starts on first visit with skip option
+  - Uses Driver.js for guided tour with highlighted elements
+  - Covers dashboard, timer, log hours form, RMPs, and history
+  - Help button (?) in header to replay tutorial anytime
+  - "Show Tutorial" link in profile dropdown
+  - Tutorial completion saved in localStorage
+  - Custom styling matching app's navy blue theme
+
+### Patch Changes
+
+- 6ec2c39: Upgrade Prisma from 6.19 to 7.10
+
+  - Database URL for the Prisma CLI moves to `prisma.config.ts`; the app connects through the `@prisma/adapter-pg` driver adapter
+  - `prisma generate` still works without `DATABASE_URL`, so installs in CI keep working
+
+- cb7c0a5: Refresh the app icon
+
+  - New three-bells icon in the app's navy and gold, matching the redesigned UI
+  - Fixes the installed-app icon showing on black (the old PNGs lost their background gradient)
+  - Proper maskable icon for Android, a 180px Apple touch icon for iOS, and an SVG favicon
+  - The header and sign-in page logos now use the app icon
+
+- 4f8d9b3: Security: close an account-takeover hole in the preview-deployment sign-in hand-off
+
+  - The OAuth `state` that carries the return URL is now signed by the deployment that starts sign-in; production ignores unsigned, expired or tampered states instead of redirecting to them
+  - Hand-off tokens are bound to the host they were issued for and rejected anywhere else
+  - The preview hostname allowlist now anchors the team suffix to the end of the hostname
+
 ## 1.7.0
 
 ### Minor Changes
