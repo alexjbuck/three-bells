@@ -27,7 +27,7 @@ router.get("/api/auth/google", authRateLimiter, (req, res, next) => {
   passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
 });
 
-router.get("/api/auth/callback", (req, res, next) => {
+router.get("/api/auth/callback", authRateLimiter, (req, res, next) => {
   setNoCache(res);
 
   let returnUrl = "/";

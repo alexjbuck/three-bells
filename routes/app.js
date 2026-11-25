@@ -16,6 +16,7 @@ const {
   requireCSRF,
   getCSRFToken,
   sanitizeError,
+  actionRateLimiter,
 } = require("../lib/security");
 const { ValidationError, isValidUUID, isValidDate, isValidNumber } = require("../lib/validation");
 const { parseLogInput, formatHours, toDateInput } = require("../lib/time");
@@ -26,6 +27,7 @@ const views = require("../views/dashboard");
 const packageJson = require("../package.json");
 
 const router = express.Router();
+router.use(actionRateLimiter);
 
 const todayUtc = () => toDateInput(new Date());
 
