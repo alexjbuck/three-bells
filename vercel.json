@@ -1,7 +1,17 @@
 {
   "version": 2,
   "outputDirectory": ".",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{public/**,CHANGELOG.md}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
   "headers": [
     {
       "source": "/",
