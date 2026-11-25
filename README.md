@@ -145,8 +145,12 @@ push to `main` deploys production. There is no deploy step in GitHub Actions.
   (`scripts/vercel-build.js`, set as `buildCommand` in `vercel.json`). If migrations fail,
   the build fails and the previous deployment keeps serving. Preview databases (Neon
   branches) are migrated by the PR Checks workflow.
-- **Versioning:** when changesets land on `main`, the Release workflow opens or updates a
-  "Version Packages" pull request. Merge it to bump the version and update `CHANGELOG.md`.
+- **Versioning:** each pull request carries its own version bump. When a PR has
+  changesets, the Version workflow adds a `chore: version packages [bot]` commit to it
+  (bumped `package.json`, updated `CHANGELOG.md`), and refreshes that commit on every
+  other open PR whenever something merges to `main`. Merging a PR therefore deploys the
+  code, version and changelog together. After the bot commits, pull before pushing more
+  commits to that branch.
 - **Environment:** set `DATABASE_URL`, `SESSION_SECRET` and the Google OAuth variables in
   the Vercel dashboard. `DATABASE_URL` must be available at build time for production.
 

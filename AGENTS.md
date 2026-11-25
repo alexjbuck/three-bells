@@ -12,6 +12,9 @@ it on every deploy) and make sure local dev and `npm test` still work.
 - `npm run checks` (lint + format check + unit tests) runs in the pre-commit hook and CI;
   run it before committing. Unit tests need no database.
 - User-facing changes need a changeset: `npm run changeset` (or add a file to `.changeset/`).
+  Don't run `npm run version` yourself: the Version workflow bumps the version on the PR
+  branch (`scripts/version-pr.sh`). It pushes a bot commit, so `git pull` before pushing
+  to a PR branch again.
 
 ## Conventions that aren't obvious from the code
 
