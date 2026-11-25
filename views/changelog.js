@@ -35,8 +35,7 @@ function markdownToHtml(md) {
     closeLists();
     if (line.startsWith("### ")) html += `<h3>${inline(line.slice(4))}</h3>`;
     else if (line.startsWith("## ")) html += `<h2>${inline(line.slice(3))}</h2>`;
-    else if (line.startsWith("# "))
-      continue; // package name; the page has its own title
+    else if (line.startsWith("# ")) continue; // package name; the page has its own title
     else html += `<p>${inline(line.trim())}</p>`;
   }
   closeLists();
